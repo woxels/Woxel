@@ -80,27 +80,41 @@ void main_loop()
                 else if(event.key.keysym.sym == SDLK_SPACE){ks[9] = 1;} // move up Z
                 else if(event.key.keysym.sym == SDLK_SLASH || event.key.keysym.sym == SDLK_x) // - change selected node
                 {
-                    //
+                    traceViewPath(0);
+                    if(lray > -1 && g.voxels[lray] > 8){g.voxels[lray]--; g.st = g.voxels[lray];}
                 }
                 else if(event.key.keysym.sym == SDLK_QUOTE || event.key.keysym.sym == SDLK_c) // + change selected node
                 {
-                    //
+                    traceViewPath(0);
+                    if(lray > -1 && g.voxels[lray] < 39){g.voxels[lray]++; g.st = g.voxels[lray];}
                 }
                 else if(event.key.keysym.sym == SDLK_RCTRL) // remove pointed voxel
                 {
-                    //
+                    dtt = t+rrsp;
+                    traceViewPath(0);
+                    if(lray > -1){g.voxels[lray] = 0;}
                 }
                 else if(event.key.keysym.sym == SDLK_RSHIFT) // place a voxel
                 {
-                    //
+                    ptt = t+rrsp;
+                    traceViewPath(1);
+                    if(lray > -1 && g.pb.w == 1){g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = g.st;}
                 }
-                else if(event.key.keysym.sym == SDLK_q) // clone pointed voxel color
+                else if(event.key.keysym.sym == SDLK_q || event.key.keysym.sym == SDLK_z) // clone pointed voxel color
                 {
-                    //
+                    traceViewPath(0);
+                    //printf("%u\n", lray);
+                    if(lray > -1 && g.voxels[lray] > 6)
+                    {
+                        g.st = g.voxels[lray];
+                        updateSelectColor();
+                    }
                 }
                 else if(event.key.keysym.sym == SDLK_e) // replace pointed voxel
                 {
-                    //
+                    rtt = t+rrsp;
+                    traceViewPath(0);
+                    if(lray > -1){g.voxels[lray] = g.st;}
                 }
                 else if(event.key.keysym.sym == SDLK_r) // toggle mirror brush
                 {
@@ -197,26 +211,23 @@ void main_loop()
                 if(event.wheel.y > 0)
                 {
                     g.st += 1.f;
-                    if(g.st > 38.f || g.colors[(uint)g.st] == 0){g.st = 7.f;}
+                    if(g.st > 39.f || g.colors[(uint)g.st] == 0){g.st = 8.f;}
                 }
                 else if(event.wheel.y < 0)
                 {
                     g.st -= 1.f;
-                    if(g.st < 7.f || g.colors[(uint)g.st] == 0)
+                    if(g.st < 8.f || g.colors[(uint)g.st] == 0)
                     {
                         if(g.colors[0] != 0)
                         {
                             uint i = 0;
-                            for(NULL; i < 39 && g.colors[i] != 0; i++){}
+                            for(NULL; i < 40 && g.colors[i] != 0; i++){}
                             g.st = (float)(i-1);
                         }
                     }
                 }
                 //printf("%.2f %u\n", g.st, g.colors[(uint)g.st]);
-                const uint tu = g.colors[(uint)g.st];
-                sclr = SDL_MapRGB(sHud->format, (tu & 0x00FF0000) >> 16,
-                                                (tu & 0x0000FF00) >> 8,
-                                                 tu & 0x000000FF);
+                updateSelectColor();
             }
             break;
 
@@ -255,21 +266,32 @@ void main_loop()
 
                 if(event.button.button == SDL_BUTTON_LEFT) // place a voxel
                 {
-                    //
+                    ptt = t+rrsp;
+                    traceViewPath(1);
+                    //printf("%u %f %u\n", lray, g.pb.w, g.voxels[lray]);
+                    if(lray > -1 && g.pb.w == 1 && g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] == 0)
+                        g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = g.st;
                 }
                 else if(event.button.button == SDL_BUTTON_RIGHT) // remove pointed voxel
                 {
                     dtt = t+rrsp;
-                    //
+                    traceViewPath(0);
+                    if(lray > -1){g.voxels[lray] = 0;}
                 }
                 else if(event.button.button == SDL_BUTTON_MIDDLE || event.button.button == SDL_BUTTON_X1) // clone pointed voxel
                 {
-                    //
+                    traceViewPath(0);
+                    if(lray > -1 && g.voxels[lray] > 6)
+                    {
+                        g.st = g.voxels[lray];
+                        updateSelectColor();
+                    }
                 }
                 else if(event.button.button == SDL_BUTTON_X2) // replace pointed node
                 {
                     rtt = t+rrsp;
-                    //
+                    traceViewPath(0);
+                    if(lray > -1){g.voxels[lray] = g.st;}
                 }
                 idle = t;
             }
@@ -317,18 +339,22 @@ void main_loop()
 
         if(ptt != 0.f && t > ptt) // place trigger
         {
-            //
+            traceViewPath(1);
+            if(lray > -1 && g.pb.w == 1){g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = g.st;}
+            ptt = t+0.1;
         }
         
         if(dtt != 0.f && t > dtt) // delete trigger
         {
-            //
+            traceViewPath(0);
+            if(lray > -1){g.voxels[lray] = 0;}
             dtt = t+0.1f;
         }
 
         if(rtt != 0.f && t > rtt) // replace trigger
         {
-            //
+            traceViewPath(0);
+            if(lray > -1){g.voxels[lray] = g.st;}
             rtt = t+0.1f;
         }
 
@@ -678,7 +704,7 @@ void drawHud(const uint type)
                     uchar r = (tu & 0x00FF0000) >> 16;
                     uchar gc = (tu & 0x0000FF00) >> 8;
                     uchar b = (tu & 0x000000FF);
-                    if(g.st == 7+i)
+                    if(g.st-1 == 7+i)
                         SDL_FillRect(sHud, &(SDL_Rect){left, 11, 20, 20}, 0xFFFFFFFF);
                     else
                         SDL_FillRect(sHud, &(SDL_Rect){left, 11, 20, 20}, 0xFF000000);
@@ -692,7 +718,7 @@ void drawHud(const uint type)
                     uchar r = (tu & 0x00FF0000) >> 16;
                     uchar gc = (tu & 0x0000FF00) >> 8;
                     uchar b = (tu & 0x000000FF);
-                    if(g.st == 23+i)
+                    if(g.st-1 == 23+i)
                         SDL_FillRect(sHud, &(SDL_Rect){left, 33, 20, 20}, 0xFFFFFFFF);
                     else
                         SDL_FillRect(sHud, &(SDL_Rect){left, 33, 20, 20}, 0xFF000000);
@@ -807,7 +833,7 @@ int main(int argc, char** argv)
     printf("SPACE + L-SHIFT = Move up and down relative Z.\n");
     printf("Left Click / R-SHIFT = Place node.\n");
     printf("Right Click / R-CTRL = Delete node.\n");
-    printf("Q / Middle Click / Mouse4 = Clone color of pointed node.\n");
+    printf("Q / Z / Middle Click / Mouse4 = Clone color of pointed node.\n");
     printf("E / Mouse5 = Replace color of pointed node.\n");
     printf("F = Toggle player fast speed on and off.\n");
     printf("1-7 = Change move speed for selected fast state.\n");
@@ -942,10 +968,7 @@ int main(int argc, char** argv)
     }
 
     // set sclr
-    const uint tu = g.colors[(uint)g.st];
-    sclr = SDL_MapRGB(sHud->format, (tu & 0x00FF0000) >> 16,
-                                    (tu & 0x0000FF00) >> 8,
-                                     tu & 0x000000FF);
+    updateSelectColor();
 
     // custom mouse sensitivity
     if(argc >= 3)
