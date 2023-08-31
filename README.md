@@ -1,5 +1,4 @@
 # Woxel
-A Voxel design program.
 
 Console Arguments:
 e.g; ./wox Untitled 0.003 /tmp/colors.txt
