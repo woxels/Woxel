@@ -152,7 +152,7 @@ const GLchar* v1 =
     "void main()\n"
     "{\n"
         "vec3 nc;\n" // https://stackoverflow.com/a/12553149
-        "nc.r = floor(voxel.y * 0.000015259);\n"
+        "nc.r = floor(voxel.y * 0.00001525878);\n"
         "nc.g = floor((voxel.y - nc.r * 65536.0) * 0.00390625);\n"
         "nc.b = floor(voxel.y - nc.r * 65536.0 - nc.g * 256.0);\n"
         "nc.r *= 0.00390625;\n"
@@ -184,7 +184,7 @@ const GLchar* f1 =
     "{\n"
         //"gl_FragColor = vec4(color, 1.0);\n"
         //"gl_FragColor = vec4(color * (1.0-(length(vp)*0.2)), 1.0);\n"
-        "gl_FragColor = vec4(color * clamp(smoothstep(1.0, 0.7, length(vp)), 0.96, 1.0), 1.0);\n"
+        "gl_FragColor = vec4(color * clamp(smoothstep(1.0, 0.7, length(vp)), 0.90, 1.0), 1.0);\n"
     "}\n";
 
 //
