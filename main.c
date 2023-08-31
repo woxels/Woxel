@@ -81,11 +81,13 @@ void main_loop()
                 else if(event.key.keysym.sym == SDLK_SLASH || event.key.keysym.sym == SDLK_x) // - change selected node
                 {
                     traceViewPath(0);
+                    if(g.voxels[lray] < 8){g.voxels[lray] = 9;}
                     if(lray > -1 && g.voxels[lray] > 8){g.voxels[lray]--; g.st = g.voxels[lray];}
                 }
                 else if(event.key.keysym.sym == SDLK_QUOTE || event.key.keysym.sym == SDLK_c) // + change selected node
                 {
                     traceViewPath(0);
+                    if(g.voxels[lray] < 8){g.voxels[lray] = 9;}
                     if(lray > -1 && g.voxels[lray] < 39){g.voxels[lray]++; g.st = g.voxels[lray];}
                 }
                 else if(event.key.keysym.sym == SDLK_RCTRL) // remove pointed voxel
@@ -812,6 +814,7 @@ int main(int argc, char** argv)
     printf("----\n");
     printf("semaJmailliWrehctelF\n");
     printf("buhtig.moc\\dibrm\n");
+    //printf("James William Fletcher (github.com/mrbid)\n");
     printf("----\n");
     SDL_version compiled;
     SDL_version linked;
@@ -825,8 +828,6 @@ int main(int argc, char** argv)
     printf("----\n");
     printf(">>> Woxel <<<\n");
     printf("----\n");
-    //printf("James William Fletcher (github.com/mrbid)\n");
-    //printf("----\n\n");
     printf("Mouse locks when you click on the game window, press ESCAPE/TAB to unlock the mouse.\n\n");
     printf("- Input Mapping\n");
     printf("W,A,S,D = Move around based on relative orientation to X and Y.\n");
