@@ -38,7 +38,7 @@ void main_loop()
     // if user is idle for 3 minutes, save.
     if(idle != 0.f && t-idle > 180.f)
     {
-        saveState(openTitle, ".idle");
+        saveState(openTitle, ".idle", load_state);
         idle = 0.f; // so we only save once
         // on input a new idle is set, and a
         // count-down for a new save begins.
@@ -168,11 +168,11 @@ void main_loop()
                 }
                 else if(event.key.keysym.sym == SDLK_F3)
                 {
-                    saveState(openTitle, "");
+                    saveState(openTitle, "", load_state);
                 }
                 else if(event.key.keysym.sym == SDLK_F8)
                 {
-                    loadState(openTitle);
+                    loadState(openTitle, 0);
                 }
                 else if(event.key.keysym.sym == SDLK_p)
                 {
@@ -313,7 +313,7 @@ void main_loop()
             case SDL_QUIT:
             {
                 SDL_HideWindow(wnd);
-                saveState(openTitle, "");
+                saveState(openTitle, "", load_state);
                 drawText(NULL, "*K", 0, 0, 0);
                 SDL_FreeSurface(s_icon);
                 SDL_FreeSurface(sHud);
@@ -881,7 +881,12 @@ int main(int argc, char** argv)
     // argv
     if(argc >= 2)
     {
-        if(strlen(argv[1]) < 256)
+        if(strcmp(argv[1], "load") == 0 && argc >= 3)
+        {
+            sprintf(openTitle, "%s", argv[2]);
+            load_state = 1;
+        }
+        else if(strlen(argv[1]) < 256)
         {
             sprintf(openTitle, "%s", argv[1]);
         }
@@ -891,7 +896,7 @@ int main(int argc, char** argv)
     SDL_SetWindowTitle(wnd, nt);
 
     // default state
-    if(loadState(openTitle) == 0)
+    if(loadState(openTitle, load_state) == 0)
     {
         defaultState(0);
         memset(&g.voxels, 0, max_voxels);
@@ -958,13 +963,19 @@ int main(int argc, char** argv)
         char tmp[16];
         timestamp(tmp);
         printf("[%s] New volumetric canvas created.\n", tmp);
-        printf("[%s] Created: %s%s.wox.gz\n", tmp, appdir, openTitle);
+        if(load_state == 0)
+            printf("[%s] Created: %s%s.wox.gz\n", tmp, appdir, openTitle);
+        else
+            printf("[%s] Created: %s\n", tmp, openTitle);
     }
     else
     {
         char tmp[16];
         timestamp(tmp);
-        printf("[%s] Opened: %s%s.wox.gz\n", tmp, appdir, openTitle);
+        if(load_state == 0)
+            printf("[%s] Opened: %s%s.wox.gz\n", tmp, appdir, openTitle);
+        else
+            printf("[%s] Opened: %s\n", tmp, openTitle);
     }
 
     // set sclr
