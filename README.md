@@ -11,6 +11,6 @@ color on each new line, 32 colors maximum. e.g; "#00FFFF".
 `./wox load wox_file_path`
 
 #### Projects can be exported via the command line:
-`./wox export project_name <option: wox,csv,ogl,ply> export_path`
+`./wox export <project_name> <option: wox,csv,ogl,ply> <export_path>`
 
 
