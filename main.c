@@ -553,10 +553,10 @@ void drawHud(const uint type)
         SDL_FillRect(sHud, &(SDL_Rect){0, 0, lenText(tmp)+8, 19}, 0xCC000000);
         drawText(sHud, tmp, 4, 4, 2);
         // center hud
-        int top = winh2-146;
         const int left = winw2-177;
-        SDL_FillRect(sHud, &(SDL_Rect){winw2-193, top-3, 382, 293}, 0x33FFFFFF);
-        SDL_FillRect(sHud, &(SDL_Rect){winw2-190, top, 376, 287}, 0xCC000000);
+        int top = winh2-152;
+        SDL_FillRect(sHud, &(SDL_Rect){winw2-193, top-3, 382, 304}, 0x33FFFFFF);
+        SDL_FillRect(sHud, &(SDL_Rect){winw2-190, top, 376, 298}, 0xCC000000);
         int a = drawText(sHud, "Woxel", winw2-15, top+11, 3);
         a = drawText(sHud, appVersion, left+330, top+11, 4);
         a = drawText(sHud, "woxels.github.io", left, top+11, 4);
@@ -576,6 +576,10 @@ void drawHud(const uint type)
         a = drawText(sHud, "Place node.", a, top, 1);
         a = drawText(sHud, " Right Click ", a, top, 2);
         drawText(sHud, "Delete node.", a, top, 1);
+
+        top += 11;
+        a = drawText(sHud, "V ", left, top, 2);
+        drawText(sHud, "Place node at current location.", a, top, 1);
 
         top += 22;
         a = drawText(sHud, "Middle Scroll ", left, top, 2);
