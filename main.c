@@ -129,7 +129,8 @@ void main_loop()
                     vec pi = look_dir;
                     vMulS(&pi, pi, 6.f);
                     vAdd(&p, p, pi);
-                    g.voxels[PTI(roundf(p.x), roundf(p.y), roundf(p.z))] = 8;
+                    const vec rp = (vec){roundf(p.x), roundf(p.y), roundf(p.z)};
+                    if(isInBounds(rp) == 1){g.voxels[PTI(rp.x, rp.y, rp.z)] = 8;}
                 }
                 else if(event.key.keysym.sym == SDLK_f) // toggle movement speeds
                 {
