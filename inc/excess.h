@@ -137,7 +137,7 @@ uint placedVoxels()
 }
 forceinline uint isInBounds(const vec p)
 {
-    if(p.x < 0.f || p.y < 0.f || p.z < 0.f || p.x > 127.5f || p.y > 127.5f || p.z > 127.5f){return 0;}
+    if(p.x < -0.5f || p.y < -0.5f || p.z < -0.5f || p.x > 127.5f || p.y > 127.5f || p.z > 127.5f){return 0;}
     return 1;
 }
 
