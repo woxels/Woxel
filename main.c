@@ -122,6 +122,15 @@ void main_loop()
                 {
                     //
                 }
+                else if(event.key.keysym.sym == SDLK_v) // place voxel at current position
+                {
+                    vec p = g.pp;
+                    vInv(&p);
+                    vec pi = look_dir;
+                    vMulS(&pi, pi, 6.f);
+                    vAdd(&p, p, pi);
+                    g.voxels[PTI(roundf(p.x), roundf(p.y), roundf(p.z))] = 8;
+                }
                 else if(event.key.keysym.sym == SDLK_f) // toggle movement speeds
                 {
                     fks = 1 - fks;
@@ -834,6 +843,7 @@ int main(int argc, char** argv)
     printf("SPACE + L-SHIFT = Move up and down relative Z.\n");
     printf("Left Click / R-SHIFT = Place node.\n");
     printf("Right Click / R-CTRL = Delete node.\n");
+    printf("V = Places voxel at current position.\n");
     printf("Q / Z / Middle Click / Mouse4 = Clone color of pointed node.\n");
     printf("E / Mouse5 = Replace color of pointed node.\n");
     printf("F = Toggle player fast speed on and off.\n");
