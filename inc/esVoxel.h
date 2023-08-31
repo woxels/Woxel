@@ -170,7 +170,7 @@ const GLchar* v1 =
         "mat4 modelview = view * model;\n"
         "vec4 vertPos4 = modelview * position;\n"
         "vec3 vertPos = vertPos4.xyz / vertPos4.w;\n"
-        "color = (nc * 0.1) + (nc * clamp(1.0-(length(vertPos)*0.001), 0.0, 1.0));\n"
+        "color = nc * clamp(1.0-(length(vertPos)*0.001), 0.0, 1.0);\n"
         "vp = position.xyz;\n"
         "gl_Position = projection * vertPos4;\n"
     "}\n";
