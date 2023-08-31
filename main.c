@@ -269,7 +269,7 @@ void main_loop()
                     ptt = t+rrsp;
                     traceViewPath(1);
                     //printf("%u %f %u\n", lray, g.pb.w, g.voxels[lray]);
-                    if(lray > -1 && g.pb.w == 1 && g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] == 0)
+                    if(lray > -1 && g.pb.w == 1 && isInBounds(g.pb) && g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] == 0)
                         g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = g.st;
                 }
                 else if(event.button.button == SDL_BUTTON_RIGHT) // remove pointed voxel
