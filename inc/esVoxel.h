@@ -152,12 +152,12 @@ const GLchar* v1 =
     "void main()\n"
     "{\n"
         "vec3 nc;\n" // https://stackoverflow.com/a/12553149
-        "nc.r = floor(voxel.y * 0.00001525878);\n"
-        "nc.g = floor((voxel.y - nc.r * 65536.0) * 0.00390625);\n"
+        "nc.r = floor(voxel.y / 65536.0);\n" // * 0.00001525878
+        "nc.g = floor((voxel.y - nc.r * 65536.0) / 256.0);\n" // * 0.00390625
         "nc.b = floor(voxel.y - nc.r * 65536.0 - nc.g * 256.0);\n"
-        "nc.r *= 0.00390625;\n"
-        "nc.g *= 0.00390625;\n"
-        "nc.b *= 0.00390625;\n"
+        "nc.r /= 256.0;\n" // *= 0.00390625
+        "nc.g /= 256.0;\n" // *= 0.00390625
+        "nc.b /= 256.0;\n" // *= 0.00390625 - no dropping accuracy on color is bad
         "float w = voxel.x * 0.000061035156;\n"
         "float z = floor(w);\n"
         "float y = fract(w) * 128.0;\n"
@@ -184,7 +184,7 @@ const GLchar* f1 =
     "{\n"
         //"gl_FragColor = vec4(color, 1.0);\n"
         //"gl_FragColor = vec4(color * (1.0-(length(vp)*0.2)), 1.0);\n"
-        "gl_FragColor = vec4(color * clamp(smoothstep(1.0, 0.7, length(vp)), 0.90, 1.0), 1.0);\n"
+        "gl_FragColor = vec4(color * clamp(smoothstep(1.0, 0.7, length(vp)), 0.90, 1.0), 1.0);\n" // 0.96?
     "}\n";
 
 //
