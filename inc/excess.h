@@ -118,7 +118,7 @@ void defaultState(const uint type)
     {
         g.ms = 37.2f;
     }
-    g.st = 7.f;
+    g.st = 8.f;
     g.pb = (vec){0.f, 0.f, 0.f, -1.f};
     if(type == 0)
     {
