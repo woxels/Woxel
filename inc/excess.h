@@ -76,7 +76,6 @@ Uint32 sclr = 0;        // selected color
 //*************************************
 // game state functions
 //*************************************
-
 // game data (for fast save and load)
 #define max_voxels 2097152 // 2.097 million
 typedef struct
@@ -134,6 +133,80 @@ uint placedVoxels()
     for(uint i = 0; i < max_voxels; i++)
         if(g.voxels[i] != 0){c++;}
     return c;
+}
+forceinline uint isInBounds(const vec p)
+{
+    if(p.x < 0.f || p.y < 0.f || p.z < 0.f || p.x > 127.5f || p.y > 127.5f || p.z > 127.5f){return 0;}
+    return 1;
+}
+
+//*************************************
+// ray functions
+//*************************************
+#define RAY_DEPTH 2048
+#define RAY_STEP 0.0625f
+int ray(vec* hit_pos, vec* hit_vec, const uint depth, const float stepsize, const vec start_pos)
+{
+    // might need exclude conditions for obviously bogus rays to avoid those 2048 steps
+    vec inc;
+    vMulS(&inc, look_dir, stepsize);
+    int hit = -1;
+    vec rp = start_pos;
+    for(uint i = 0; i < depth; i++)
+    {
+        vAdd(&rp, rp, inc);
+        if(isInBounds(rp) == 0){continue;} // break;
+        vec rb;
+        rb.x = roundf(rp.x);
+        rb.y = roundf(rp.y);
+        rb.z = roundf(rp.z);
+        const uint vi = PTI(rb.x, rb.y, rb.z);
+        //printf("%u: %f %f %f\n", vi, rb.x, rb.y, rb.z);
+        if(g.voxels[vi] != 0)
+        {
+            *hit_vec = (vec){rp.x-rb.x, rp.y-rb.y, rp.z-rb.z};
+            *hit_pos = (vec){rb.x, rb.y, rb.z};
+            hit = vi;
+            break;
+        }
+        if(hit > -1){break;}
+    }
+    return hit;
+}
+void traceViewPath(const uint face)
+{
+    g.pb.w = -1.f; // pre-set as failed
+    vec rp;
+    vec hp;
+    lray = ray(&hp, &rp, RAY_DEPTH, RAY_STEP, ipp);
+    //printf("TVP: %u: %f %f %f - %f %f %f\n", lray, hp.x, hp.y, hp.z, ipp.x, ipp.y, ipp.z);
+    if(lray > -1 && face == 1)
+    {
+        vNorm(&rp);
+        vec diff = rp;
+        rp = hp;
+
+        vec fd = diff;
+        fd.x = fabsf(diff.x);
+        fd.y = fabsf(diff.y);
+        fd.z = fabsf(diff.z);
+        if     (fd.x > fd.y && fd.x > fd.z){diff.y = 0.f, diff.z = 0.f;}
+        else if(fd.y > fd.x && fd.y > fd.z){diff.x = 0.f, diff.z = 0.f;}
+        else if(fd.z > fd.x && fd.z > fd.y){diff.x = 0.f, diff.y = 0.f;}
+        diff.x = roundf(diff.x);
+        diff.y = roundf(diff.y);
+        diff.z = roundf(diff.z);
+
+        rp.x += diff.x;
+        rp.y += diff.y;
+        rp.z += diff.z;
+
+        if(vSumAbs(diff) == 1.f)
+        {
+            g.pb = rp;
+            g.pb.w = 1.f; // success
+        }
+    }
 }
 
 //*************************************
@@ -304,6 +377,13 @@ void replaceColour(SDL_Surface* surf, SDL_Rect r, Uint32 old_color, Uint32 new_c
     for(Uint32 y = r.y; y < max_y; ++y)
         for(Uint32 x = r.x; x < max_x; ++x)
             if(getpixel(surf, x, y) == old_color){setpixel(surf, x, y, new_color);}
+}
+void updateSelectColor()
+{
+    const uint tu = g.colors[(uint)g.st-1];
+    sclr = SDL_MapRGB(sHud->format, (tu & 0x00FF0000) >> 16,
+                                    (tu & 0x0000FF00) >> 8,
+                                     tu & 0x000000FF);
 }
 
 //*************************************
