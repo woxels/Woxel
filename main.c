@@ -104,7 +104,7 @@ void main_loop()
                 {
                     traceViewPath(0);
                     //printf("%u\n", lray);
-                    if(lray > -1 && g.voxels[lray] > 6)
+                    if(lray > -1 && g.voxels[lray] > 7)
                     {
                         g.st = g.voxels[lray];
                         updateSelectColor();
@@ -281,7 +281,7 @@ void main_loop()
                 else if(event.button.button == SDL_BUTTON_MIDDLE || event.button.button == SDL_BUTTON_X1) // clone pointed voxel
                 {
                     traceViewPath(0);
-                    if(lray > -1 && g.voxels[lray] > 6)
+                    if(lray > -1 && g.voxels[lray] > 7)
                     {
                         g.st = g.voxels[lray];
                         updateSelectColor();
