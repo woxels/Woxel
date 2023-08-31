@@ -72,6 +72,7 @@ float rrsp = 0.3f;      // repeat replace speed
 uint fks = 0;           // F-Key state (fast mode toggle)
 float bigc = 0.f;       // big cursor start time
 Uint32 sclr = 0;        // selected color
+uint load_state = 0;    // loaded from appdir or custom path?
 
 //*************************************
 // game state functions
@@ -273,7 +274,7 @@ void loadColors(const char* file)
 //*************************************
 // save and load functions
 //*************************************
-void saveState(const char* name, const char* fne)
+void saveState(const char* name, const char* fne, const uint fs)
 {
 #ifdef __linux__
     setlocale(LC_NUMERIC, "");
@@ -281,6 +282,8 @@ void saveState(const char* name, const char* fne)
 #endif
     char file[256];
     sprintf(file, "%s%s.wox.gz%s", appdir, name, fne);
+    if(fs == 0){sprintf(file, "%s%s.wox.gz%s", appdir, name, fne);}
+    else{sprintf(file, "%s", name);}
     gzFile f = gzopen(file, "wb9hR");
     if(f != Z_NULL)
     {
@@ -301,14 +304,15 @@ void saveState(const char* name, const char* fne)
 #endif
     }
 }
-uint loadState(const char* name)
+uint loadState(const char* name, const uint fs)
 {
 #ifdef __linux__
     setlocale(LC_NUMERIC, "");
     const uint64_t st = microtime();
 #endif
-    char file[256];
-    sprintf(file, "%s%s.wox.gz", appdir, name);
+    char file[1024];
+    if(fs == 0){sprintf(file, "%s%s.wox.gz", appdir, name);}
+    else{sprintf(file, "%s", name);}
     gzFile f = gzopen(file, "rb");
     if(f != Z_NULL)
     {
