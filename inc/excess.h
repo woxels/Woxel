@@ -113,17 +113,10 @@ void defaultState(const uint type)
     g.xrot = 0.f;
     g.yrot = 1.57f;
     g.pp = (vec){-64.f, 130.f, -64.f};
-    if(type == 0)
-    {
-        g.ms = 37.2f;
-    }
+    if(type == 0){g.ms = 37.2f;}
     g.st = 8.f;
     g.pb = (vec){0.f, 0.f, 0.f, -1.f};
-    if(type == 0)
-    {
-        g.lms = 37.2f;
-        g.cms = 74.4f;
-    }
+    if(type == 0){g.lms = 37.2f, g.cms = 74.4f;}
     g.plock = 0;
 }
 uint placedVoxels()
@@ -158,16 +151,14 @@ uint isInBounds(const vec p)
 //*************************************
 // ray functions
 //*************************************
-#define RAY_DEPTH 2048
-#define RAY_STEP 0.0625f
-int ray(vec* hit_pos, vec* hit_vec, const uint depth, const float stepsize, const vec start_pos)
+int ray(vec* hit_pos, vec* hit_vec, const vec start_pos) // the look vector is a global
 {
     // might need exclude conditions for obviously bogus rays to avoid those 2048 steps
     vec inc;
-    vMulS(&inc, look_dir, stepsize);
+    vMulS(&inc, look_dir, 0.0625f);
     int hit = -1;
     vec rp = start_pos;
-    for(uint i = 0; i < depth; i++)
+    for(uint i = 0; i < 2048; i++)
     {
         vAdd(&rp, rp, inc);
         if(isInBounds(rp) == 0){continue;} // break;
@@ -192,7 +183,7 @@ void traceViewPath(const uint face)
 {
     g.pb.w = -1.f; // pre-set as failed
     vec rp;
-    lray = ray(&ghp, &rp, RAY_DEPTH, RAY_STEP, ipp);
+    lray = ray(&ghp, &rp, ipp);
     //printf("TVP: %u: %f %f %f - %f %f %f\n", lray, ghp.x, ghp.y, ghp.z, ipp.x, ipp.y, ipp.z);
     if(lray > -1 && face == 1)
     {
