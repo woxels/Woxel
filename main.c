@@ -958,6 +958,7 @@ int main(int argc, char** argv)
     printf("* Your state is automatically saved on exit.\n");
 
     printf("\nConsole Arguments:\n");
+    printf("./wox <project_name> <mouse_sensitivity> <color_palette_file_path>\n");
     printf("e.g; ./wox Untitled 0.003 /tmp/colors.txt\n");
     printf("1st, \"Untitled\", Name of project to open or create.\n");
     printf("2nd, \"0.003\", Mouse sensitivity.\n");
@@ -1121,7 +1122,7 @@ int main(int argc, char** argv)
                     uchar r = (tu & 0x00FF0000) >> 16;
                     uchar gc = (tu & 0x0000FF00) >> 8;
                     uchar b = (tu & 0x000000FF);
-                    fprintf(f, "%g %g %g %02X%02X%02X\n", p.x,p.y,p.z, r,gc,b);
+                    fprintf(f, "%g %g %g %02X%02X%02X\n", p.x-64.f,p.y-64.f,p.z-64.f, r,gc,b);
                 }
                 fclose(f);
                 char tmp[16];
