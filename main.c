@@ -7,6 +7,7 @@
     Colour Converter: https://www.easyrgb.com
 */
 #include "inc/excess.h"
+//#define BENCH_FPS
 void main_loop()
 {
     // time delta
@@ -15,22 +16,28 @@ void main_loop()
     const float dt = t-lt;
     lt = t;
 
-    { // fps counter
+    // fps counter
+    if(focus_mouse == 0)
+    {
         static uint fc = 0;
         static float ft = 0.f;
         if(t > ft)
         {
             g_fps = fc/3;
-            // static uint count = 0;
-            // count++;
-            // if(count > 2){exit(0);}
-            // printf("%u\n", g_fps);
+#ifdef BENCH_FPS
+            static uint count = 0;
+            count++;
+            if(count > 2){exit(0);}
+            printf("%u\n", g_fps);
+#endif
             fc = 0;
             ft = t+3.f;
         }
         fc++;
     }
-    //return;
+#ifdef BENCH_FPS
+    return;
+#endif
 
     // input handling
     static float idle = 0.f;
@@ -1149,7 +1156,6 @@ int main(int argc, char** argv)
     printf("F8 = Load. (will erase what you have done since the last save)\n");
     printf("\n* Arrow Keys can be used to move the view around.\n");
     printf("* Your state is automatically saved on exit.\n");
-
     printf("\nConsole Arguments:\n");
     printf("./wox <project_name> <mouse_sensitivity> <color_palette_file_path>\n");
     printf("e.g; ./wox Untitled 0.003 /tmp/colors.txt\n");
