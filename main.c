@@ -566,9 +566,12 @@ void main_loop()
         //     g.voxels[PTIB(vpos.x, vpos.y, vpos.z-1)] == 0 ||
         //     g.voxels[PTIB(vpos.x, vpos.y, vpos.z+1)] == 0 )
         // {
+        if(g.colors[g.voxels[i]-1] != 0)
+        {
             const float fi = (float)i;
             glUniform2f(voxel_id, fi, g.colors[g.voxels[i]-1]);
             glDrawElements(GL_TRIANGLES, voxel_numind, GL_UNSIGNED_BYTE, 0);
+        }
         // }
     }
 
@@ -995,7 +998,8 @@ int main(int argc, char** argv)
                     uchar r = (tu & 0x00FF0000) >> 16;
                     uchar gc = (tu & 0x0000FF00) >> 8;
                     uchar b = (tu & 0x000000FF);
-                    fprintf(f, "%g %g %g %02X%02X%02X\n", p.x-64.f,p.y-64.f,p.z, r,gc,b);
+                    if(g.colors[g.voxels[i]-1] != 0)
+                        fprintf(f, "%g %g %g %02X%02X%02X\n", p.x-64.f,p.y-64.f,p.z, r,gc,b);
                 }
                 fclose(f);
                 char tmp[16];
