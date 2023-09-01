@@ -857,43 +857,9 @@ void drawHud(const uint type)
 //*************************************
 int main(int argc, char** argv)
 {
-    if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_EVENTS) < 0)
-    {
-        printf("ERROR: SDL_Init(): %s\n", SDL_GetError());
-        return 1;
-    }
-    int msaa = 16;
-    if(msaa > 0)
-    {
-        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, msaa);
-    }
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-    wnd = SDL_CreateWindow(appTitle, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winw, winh, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
-    while(wnd == NULL)
-    {
-        if(msaa == 0)
-        {
-            printf("ERROR: SDL_CreateWindow(): %s\n", SDL_GetError());
-            return 1;
-        }
-        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, msaa/2);
-        wnd = SDL_CreateWindow(appTitle, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winw, winh, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
-    }
-    SDL_GL_SetSwapInterval(1);
-    glc = SDL_GL_CreateContext(wnd);
-    if(glc == NULL)
-    {
-        printf("ERROR: SDL_GL_CreateContext(): %s\n", SDL_GetError());
-        return 1;
-    }
-
-    // set icon
-    s_icon = surfaceFromData((Uint32*)&icon, 16, 16);
-    SDL_SetWindowIcon(wnd, s_icon);
-
+//*************************************
+// init stuff
+//*************************************
     // seed random
     srand(time(0));
     srandf(time(0));
@@ -902,107 +868,6 @@ int main(int argc, char** argv)
     basedir = SDL_GetBasePath();
     appdir = SDL_GetPrefPath("voxdsp", "woxel");
 
-    // print info
-    printf("----\n");
-    printAttrib(SDL_GL_DOUBLEBUFFER, "GL_DOUBLEBUFFER");
-    printAttrib(SDL_GL_DEPTH_SIZE, "GL_DEPTH_SIZE");
-    printAttrib(SDL_GL_RED_SIZE, "GL_RED_SIZE");
-    printAttrib(SDL_GL_GREEN_SIZE, "GL_GREEN_SIZE");
-    printAttrib(SDL_GL_BLUE_SIZE, "GL_BLUE_SIZE");
-    printAttrib(SDL_GL_ALPHA_SIZE, "GL_ALPHA_SIZE");
-    printAttrib(SDL_GL_BUFFER_SIZE, "GL_BUFFER_SIZE");
-    printAttrib(SDL_GL_STENCIL_SIZE, "GL_STENCIL_SIZE");
-    printAttrib(SDL_GL_ACCUM_RED_SIZE, "GL_ACCUM_RED_SIZE");
-    printAttrib(SDL_GL_ACCUM_GREEN_SIZE, "GL_ACCUM_GREEN_SIZE");
-    printAttrib(SDL_GL_ACCUM_BLUE_SIZE, "GL_ACCUM_BLUE_SIZE");
-    printAttrib(SDL_GL_ACCUM_ALPHA_SIZE, "GL_ACCUM_ALPHA_SIZE");
-    printAttrib(SDL_GL_STEREO, "GL_STEREO");
-    printAttrib(SDL_GL_MULTISAMPLEBUFFERS, "GL_MULTISAMPLEBUFFERS");
-    printAttrib(SDL_GL_MULTISAMPLESAMPLES, "GL_MULTISAMPLESAMPLES");
-    printAttrib(SDL_GL_ACCELERATED_VISUAL, "GL_ACCELERATED_VISUAL");
-    printAttrib(SDL_GL_RETAINED_BACKING, "GL_RETAINED_BACKING");
-    printAttrib(SDL_GL_CONTEXT_MAJOR_VERSION, "GL_CONTEXT_MAJOR_VERSION");
-    printAttrib(SDL_GL_CONTEXT_MINOR_VERSION, "GL_CONTEXT_MINOR_VERSION");
-    printAttrib(SDL_GL_CONTEXT_FLAGS, "GL_CONTEXT_FLAGS");
-    printAttrib(SDL_GL_CONTEXT_PROFILE_MASK, "GL_CONTEXT_PROFILE_MASK");
-    printAttrib(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, "GL_SHARE_WITH_CURRENT_CONTEXT");
-    printAttrib(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, "GL_FRAMEBUFFER_SRGB_CAPABLE");
-    printAttrib(SDL_GL_CONTEXT_RELEASE_BEHAVIOR, "GL_CONTEXT_RELEASE_BEHAVIOR");
-    printAttrib(SDL_GL_CONTEXT_EGL, "GL_CONTEXT_EGL");
-    printf("----\n");
-    printf("semaJmailliWrehctelF\n");
-    printf("buhtig.moc\\dibrm\n");
-    //printf("James William Fletcher (github.com/mrbid)\n");
-    printf("----\n");
-    SDL_version compiled;
-    SDL_version linked;
-    SDL_VERSION(&compiled);
-    SDL_GetVersion(&linked);
-    printf("Compiled against SDL version %u.%u.%u.\n", compiled.major, compiled.minor, compiled.patch);
-    printf("Linked against SDL version %u.%u.%u.\n", linked.major, linked.minor, linked.patch);
-    printf("----\n");
-    printf("currentPath: %s\n", basedir);
-    printf("dataPath:    %s\n", appdir);
-    printf("----\n");
-    printf(">>> Woxel <<<\n");
-    printf("----\n");
-    printf("Mouse locks when you click on the game window, press ESCAPE/TAB to unlock the mouse.\n\n");
-    printf("- Input Mapping\n");
-    printf("W,A,S,D = Move around based on relative orientation to X and Y.\n");
-    printf("SPACE + L-SHIFT = Move up and down relative Z.\n");
-    printf("Left Click / R-SHIFT = Place node.\n");
-    printf("Right Click / R-CTRL = Delete node.\n");
-    printf("V = Places voxel at current position.\n");
-    printf("Q / Z / Middle Click / Mouse4 = Clone color of pointed node.\n");
-    printf("E / Mouse5 = Replace color of pointed node.\n");
-    printf("F = Toggle player fast speed on and off.\n");
-    printf("1-7 = Change move speed for selected fast state.\n");
-    printf("X + C / Slash + Quote = Scroll color of pointed node.\n");
-    printf("R = Toggle mirror brush.\n");
-    printf("P = Toggle pitch lock.\n");
-    printf("F1 = Resets environment state back to default.\n");
-    printf("F2 = Toggle HUD visibility.\n");
-    printf("F3 = Save. (auto saves on exit, backup made if idle for 3 mins.)\n");
-    printf("F8 = Load. (will erase what you have done since the last save)\n");
-    printf("\n* Arrow Keys can be used to move the view around.\n");
-    printf("* Your state is automatically saved on exit.\n");
-
-    printf("\nConsole Arguments:\n");
-    printf("./wox <project_name> <mouse_sensitivity> <color_palette_file_path>\n");
-    printf("e.g; ./wox Untitled 0.003 /tmp/colors.txt\n");
-    printf("1st, \"Untitled\", Name of project to open or create.\n");
-    printf("2nd, \"0.003\", Mouse sensitivity.\n");
-    printf("3rd, \"/tmp/colors.txt\", path to a color palette file, the file must contain a hex\n");
-    printf("color on each new line, 32 colors maximum. e.g; \"#00FFFF\".\n\n");
-    printf("To load from file: ./wox loadgz <file_path>\n");
-    printf("e.g; ./wox loadgz /home/user/file.wox.gz\n\n");
-    printf("To export: ./wox export <project_name> <option: wox,txt> <export_path>\n");
-    printf("e.g; ./wox export ply /home/user/file.ply\n\n");
-    printf("Find more color palettes at; https://lospec.com/palette-list\n");
-    printf("You can use any palette upto 32 colors. But don't use #000000 (Black)\nin your color palette as it will terminate at that color.\n\n");
-    printf("Default 32 Color Palette: https://lospec.com/palette-list/resurrect-32\n");
-    printf("Icon: http://www.forrestwalter.com/icons/\n");
-    printf("\n----\n");
-
-//*************************************
-// projection & compile & link shader program
-//*************************************
-    doPerspective();
-    makeVoxel();
-    makeHud();
-
-//*************************************
-// configure render options
-//*************************************
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_CULL_FACE);
-    glEnable(GL_DEPTH_TEST);
-    glLineWidth(0.f);
-    glClearColor(0.f, 0.f, 0.f, 0.f);
-
-//*************************************
-// init stuff
-//*************************************
     // argv
     char export_path[1024] = {0};
     uint export_type = 0;
@@ -1025,10 +890,6 @@ int main(int argc, char** argv)
 
         sprintf(export_path, "%s", argv[4]);
     }
-    // printf("%s\n", argv[1]);
-    char nt[512];
-    sprintf(nt, "%s - %s", appTitle, openTitle);
-    SDL_SetWindowTitle(wnd, nt);
 
     // default state
     if(loadState(openTitle, load_state) == 0)
@@ -1145,9 +1006,6 @@ int main(int argc, char** argv)
         return 0;
     }
 
-    // set sclr
-    updateSelectColor();
-
     // custom mouse sensitivity
     if(argc >= 3)
     {
@@ -1161,10 +1019,156 @@ int main(int argc, char** argv)
     // load custom palette
     if(argc >= 4){loadColors(argv[3]);}
 
-    // hud buffer
+//*************************************
+// window creation
+//*************************************
+    if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_EVENTS) < 0)
+    {
+        printf("ERROR: SDL_Init(): %s\n", SDL_GetError());
+        return 1;
+    }
+    int msaa = 16;
+    if(msaa > 0)
+    {
+        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, msaa);
+    }
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+    wnd = SDL_CreateWindow(appTitle, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winw, winh, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
+    while(wnd == NULL)
+    {
+        if(msaa == 0)
+        {
+            printf("ERROR: SDL_CreateWindow(): %s\n", SDL_GetError());
+            return 1;
+        }
+        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, msaa/2);
+        wnd = SDL_CreateWindow(appTitle, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winw, winh, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
+    }
+    SDL_GL_SetSwapInterval(1);
+    glc = SDL_GL_CreateContext(wnd);
+    if(glc == NULL)
+    {
+        printf("ERROR: SDL_GL_CreateContext(): %s\n", SDL_GetError());
+        return 1;
+    }
+
+    // set icon
+    s_icon = surfaceFromData((Uint32*)&icon, 16, 16);
+    SDL_SetWindowIcon(wnd, s_icon);
+
+    // window title
+    char nt[512];
+    sprintf(nt, "%s - %s", appTitle, openTitle);
+    SDL_SetWindowTitle(wnd, nt);
+
+    // print info
+    printf("----\n");
+    printAttrib(SDL_GL_DOUBLEBUFFER, "GL_DOUBLEBUFFER");
+    printAttrib(SDL_GL_DEPTH_SIZE, "GL_DEPTH_SIZE");
+    printAttrib(SDL_GL_RED_SIZE, "GL_RED_SIZE");
+    printAttrib(SDL_GL_GREEN_SIZE, "GL_GREEN_SIZE");
+    printAttrib(SDL_GL_BLUE_SIZE, "GL_BLUE_SIZE");
+    printAttrib(SDL_GL_ALPHA_SIZE, "GL_ALPHA_SIZE");
+    printAttrib(SDL_GL_BUFFER_SIZE, "GL_BUFFER_SIZE");
+    printAttrib(SDL_GL_STENCIL_SIZE, "GL_STENCIL_SIZE");
+    printAttrib(SDL_GL_ACCUM_RED_SIZE, "GL_ACCUM_RED_SIZE");
+    printAttrib(SDL_GL_ACCUM_GREEN_SIZE, "GL_ACCUM_GREEN_SIZE");
+    printAttrib(SDL_GL_ACCUM_BLUE_SIZE, "GL_ACCUM_BLUE_SIZE");
+    printAttrib(SDL_GL_ACCUM_ALPHA_SIZE, "GL_ACCUM_ALPHA_SIZE");
+    printAttrib(SDL_GL_STEREO, "GL_STEREO");
+    printAttrib(SDL_GL_MULTISAMPLEBUFFERS, "GL_MULTISAMPLEBUFFERS");
+    printAttrib(SDL_GL_MULTISAMPLESAMPLES, "GL_MULTISAMPLESAMPLES");
+    printAttrib(SDL_GL_ACCELERATED_VISUAL, "GL_ACCELERATED_VISUAL");
+    printAttrib(SDL_GL_RETAINED_BACKING, "GL_RETAINED_BACKING");
+    printAttrib(SDL_GL_CONTEXT_MAJOR_VERSION, "GL_CONTEXT_MAJOR_VERSION");
+    printAttrib(SDL_GL_CONTEXT_MINOR_VERSION, "GL_CONTEXT_MINOR_VERSION");
+    printAttrib(SDL_GL_CONTEXT_FLAGS, "GL_CONTEXT_FLAGS");
+    printAttrib(SDL_GL_CONTEXT_PROFILE_MASK, "GL_CONTEXT_PROFILE_MASK");
+    printAttrib(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, "GL_SHARE_WITH_CURRENT_CONTEXT");
+    printAttrib(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, "GL_FRAMEBUFFER_SRGB_CAPABLE");
+    printAttrib(SDL_GL_CONTEXT_RELEASE_BEHAVIOR, "GL_CONTEXT_RELEASE_BEHAVIOR");
+    printAttrib(SDL_GL_CONTEXT_EGL, "GL_CONTEXT_EGL");
+    printf("----\n");
+    printf("semaJmailliWrehctelF\n");
+    printf("buhtig.moc\\dibrm\n");
+    //printf("James William Fletcher (github.com/mrbid)\n");
+    printf("----\n");
+    SDL_version compiled;
+    SDL_version linked;
+    SDL_VERSION(&compiled);
+    SDL_GetVersion(&linked);
+    printf("Compiled against SDL version %u.%u.%u.\n", compiled.major, compiled.minor, compiled.patch);
+    printf("Linked against SDL version %u.%u.%u.\n", linked.major, linked.minor, linked.patch);
+    printf("----\n");
+    printf("currentPath: %s\n", basedir);
+    printf("dataPath:    %s\n", appdir);
+    printf("----\n");
+    printf(">>> Woxel <<<\n");
+    printf("----\n");
+    printf("Mouse locks when you click on the game window, press ESCAPE/TAB to unlock the mouse.\n\n");
+    printf("- Input Mapping\n");
+    printf("W,A,S,D = Move around based on relative orientation to X and Y.\n");
+    printf("SPACE + L-SHIFT = Move up and down relative Z.\n");
+    printf("Left Click / R-SHIFT = Place node.\n");
+    printf("Right Click / R-CTRL = Delete node.\n");
+    printf("V = Places voxel at current position.\n");
+    printf("Q / Z / Middle Click / Mouse4 = Clone color of pointed node.\n");
+    printf("E / Mouse5 = Replace color of pointed node.\n");
+    printf("F = Toggle player fast speed on and off.\n");
+    printf("1-7 = Change move speed for selected fast state.\n");
+    printf("X + C / Slash + Quote = Scroll color of pointed node.\n");
+    printf("R = Toggle mirror brush.\n");
+    printf("P = Toggle pitch lock.\n");
+    printf("F1 = Resets environment state back to default.\n");
+    printf("F2 = Toggle HUD visibility.\n");
+    printf("F3 = Save. (auto saves on exit, backup made if idle for 3 mins.)\n");
+    printf("F8 = Load. (will erase what you have done since the last save)\n");
+    printf("\n* Arrow Keys can be used to move the view around.\n");
+    printf("* Your state is automatically saved on exit.\n");
+
+    printf("\nConsole Arguments:\n");
+    printf("./wox <project_name> <mouse_sensitivity> <color_palette_file_path>\n");
+    printf("e.g; ./wox Untitled 0.003 /tmp/colors.txt\n");
+    printf("1st, \"Untitled\", Name of project to open or create.\n");
+    printf("2nd, \"0.003\", Mouse sensitivity.\n");
+    printf("3rd, \"/tmp/colors.txt\", path to a color palette file, the file must contain a hex\n");
+    printf("color on each new line, 32 colors maximum. e.g; \"#00FFFF\".\n\n");
+    printf("To load from file: ./wox loadgz <file_path>\n");
+    printf("e.g; ./wox loadgz /home/user/file.wox.gz\n\n");
+    printf("To export: ./wox export <project_name> <option: wox,txt> <export_path>\n");
+    printf("e.g; ./wox export ply /home/user/file.ply\n\n");
+    printf("Find more color palettes at; https://lospec.com/palette-list\n");
+    printf("You can use any palette upto 32 colors. But don't use #000000 (Black)\nin your color palette as it will terminate at that color.\n\n");
+    printf("Default 32 Color Palette: https://lospec.com/palette-list/resurrect-32\n");
+    printf("Icon: http://www.forrestwalter.com/icons/\n");
+    printf("\n----\n");
+
+//*************************************
+// projection & compile & link shader program
+//*************************************
+    doPerspective();
+    makeVoxel();
+    makeHud();
+
+//*************************************
+// configure render options
+//*************************************
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_CULL_FACE);
+    glEnable(GL_DEPTH_TEST);
+    glLineWidth(0.f);
+    glClearColor(0.f, 0.f, 0.f, 0.f);
+
+//*************************************
+// final init stuff
+//*************************************
     sHud = SDL_RGBA32Surface(winw, winh);
     drawHud(0);
     hudmap = esLoadTextureA(winw, winh, sHud->pixels, 0);
+    updateSelectColor();
 
 //*************************************
 // execute update / render loop
