@@ -604,23 +604,12 @@ void main_loop()
     // for(uint i = 0; i < max_voxels; i++)
     // {
     //     if(g.voxels[i] == 0){continue;}
-    //     // const vec vpos = ITP(i);
-    //     // if( vpos.x <= 1.f || vpos.y <= 1.f || vpos.z <= 1.f || // this line is not perfect and float accuracy from ITP() causes slight over-rendering
-    //     //     vpos.x >= 127.f || vpos.y >= 127.f || vpos.z >= 127.f ||
-    //     //     g.voxels[PTIB(vpos.x-1, vpos.y, vpos.z)] == 0 || // check if generally occluded (not by lookdir)
-    //     //     g.voxels[PTIB(vpos.x+1, vpos.y, vpos.z)] == 0 ||
-    //     //     g.voxels[PTIB(vpos.x, vpos.y-1, vpos.z)] == 0 ||
-    //     //     g.voxels[PTIB(vpos.x, vpos.y+1, vpos.z)] == 0 ||
-    //     //     g.voxels[PTIB(vpos.x, vpos.y, vpos.z-1)] == 0 ||
-    //     //     g.voxels[PTIB(vpos.x, vpos.y, vpos.z+1)] == 0 )
-    //     // {
     //     if(g.colors[g.voxels[i]-1] != 0)
     //     {
     //         const float fi = (float)i;
     //         glUniform2f(voxel_id, fi, g.colors[g.voxels[i]-1]);
     //         glDrawElements(GL_TRIANGLES, voxel_numind, GL_UNSIGNED_BYTE, 0);
     //     }
-    //     // }
     // }
 
     for(uchar z = 0; z < 128; z++)
@@ -1123,17 +1112,6 @@ int main(int argc, char** argv)
                         }
                     }
                 }
-                // for(uint i = 0; i < max_voxels; i++)
-                // {
-                //     if(g.voxels[i] < 8){continue;}
-                //     const vec p = ITP(i);
-                //     const uint tu = g.colors[g.voxels[i]-1];
-                //     uchar r = (tu & 0x00FF0000) >> 16;
-                //     uchar gc = (tu & 0x0000FF00) >> 8;
-                //     uchar b = (tu & 0x000000FF);
-                //     if(r != 0 && gc != 0 && b != 0)
-                //         fprintf(f, "%g %g %g %02X%02X%02X\n", p.x-64.f,p.y-64.f,p.z, r,gc,b);
-                // }
                 fclose(f);
                 char tmp[16];
                 timestamp(tmp);
