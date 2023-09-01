@@ -258,7 +258,7 @@ void main_loop()
                 if(event.wheel.y > 0)
                 {
                     g.st += 1.f;
-                    if(g.st > 39.f || g.colors[(uint)g.st] == 0){g.st = 8.f;}
+                    if(g.st > 39.f || g.colors[(uint)g.st-1] == 0){g.st = 8.f;}
                 }
                 else if(event.wheel.y < 0)
                 {
@@ -269,7 +269,7 @@ void main_loop()
                         {
                             uint i = 0;
                             for(NULL; i < 40 && g.colors[i] != 0; i++){}
-                            g.st = (float)(i-1);
+                            g.st = (float)(i);
                         }
                     }
                 }
