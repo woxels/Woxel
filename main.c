@@ -964,8 +964,8 @@ int main(int argc, char** argv)
     printf("2nd, \"0.003\", Mouse sensitivity.\n");
     printf("3rd, \"/tmp/colors.txt\", path to a color palette file, the file must contain a hex\n");
     printf("color on each new line, 32 colors maximum. e.g; \"#00FFFF\".\n\n");
-    printf("To load from file: ./wox load <file_path>\n");
-    printf("e.g; ./wox load /home/user/file.wox.gz\n\n");
+    printf("To load from file: ./wox loadgz <file_path>\n");
+    printf("e.g; ./wox loadgz /home/user/file.wox.gz\n\n");
     printf("To export: ./wox export <project_name> <option: wox,txt,ogl,ply> <export_path>\n");
     printf("e.g; ./wox export ply /home/user/file.ply\n\n");
     printf("Find more color palettes at; https://lospec.com/palette-list\n");
@@ -1000,7 +1000,7 @@ int main(int argc, char** argv)
     {
         sprintf(openTitle, "%s", argv[1]);
     }
-    if(argc >= 3 && strcmp(argv[1], "load") == 0)
+    if(argc >= 3 && strcmp(argv[1], "loadgz") == 0)
     {
         sprintf(openTitle, "%s", argv[2]);
         load_state = 1;
