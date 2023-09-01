@@ -1122,7 +1122,7 @@ int main(int argc, char** argv)
                     uchar r = (tu & 0x00FF0000) >> 16;
                     uchar gc = (tu & 0x0000FF00) >> 8;
                     uchar b = (tu & 0x000000FF);
-                    fprintf(f, "%g %g %g %02X%02X%02X\n", p.x-64.f,p.y-64.f,p.z-64.f, r,gc,b);
+                    fprintf(f, "%g %g %g %02X%02X%02X\n", p.x-64.f,p.y-64.f,p.z, r,gc,b);
                 }
                 fclose(f);
                 char tmp[16];
