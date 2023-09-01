@@ -714,7 +714,7 @@ void drawHud(const uint type)
                     if(mx > left2 && mx < left2+20 && my > top+21 && my < top+42)
                     {
                         char tmp[16];
-                        sprintf(tmp, "%X%X%X", r, gc, b);
+                        sprintf(tmp, "%02X%02X%02X", r, gc, b);
                         const int len = lenText(tmp);
                         const int len2 = len/2;
                         SDL_FillRect(sHud, &(SDL_Rect){mx-len2-4, top-4, len+9, 19}, tclr);
@@ -737,7 +737,7 @@ void drawHud(const uint type)
                     if(mx > left2 && mx < left2+20 && my > top+43 && my < top+63)
                     {
                         char tmp[16];
-                        sprintf(tmp, "%X%X%X", r, gc, b);
+                        sprintf(tmp, "%02X%02X%02X", r, gc, b);
                         const int len = lenText(tmp);
                         const int len2 = len/2;
                         SDL_FillRect(sHud, &(SDL_Rect){mx-len2-4, top-4, len+9, 19}, tclr);
@@ -965,7 +965,7 @@ int main(int argc, char** argv)
     printf("color on each new line, 32 colors maximum. e.g; \"#00FFFF\".\n\n");
     printf("To load from file: ./wox load <file_path>\n");
     printf("e.g; ./wox load /home/user/file.wox.gz\n\n");
-    printf("To export: ./wox export <project_name> <option: wox,csv,ogl,ply> <export_path>\n");
+    printf("To export: ./wox export <project_name> <option: wox,txt,ogl,ply> <export_path>\n");
     printf("e.g; ./wox export ply /home/user/file.ply\n\n");
     printf("Find more color palettes at; https://lospec.com/palette-list\n");
     printf("You can use any palette upto 32 colors. But don't use #000000 (Black)\nin your color palette as it will terminate at that color.\n\n");
@@ -993,18 +993,28 @@ int main(int argc, char** argv)
 // init stuff
 //*************************************
     // argv
-    if(argc >= 2)
+    char export_path[1024] = {0};
+    uint export_type = 0;
+    if(argc >= 2 && strlen(argv[1]) < 256)
     {
-        if(strcmp(argv[1], "load") == 0 && argc >= 3)
-        {
-            sprintf(openTitle, "%s", argv[2]);
-            load_state = 1;
-        }
-        else if(strlen(argv[1]) < 256)
-        {
-            sprintf(openTitle, "%s", argv[1]);
-        }
+        sprintf(openTitle, "%s", argv[1]);
     }
+    if(argc >= 3 && strcmp(argv[1], "load") == 0)
+    {
+        sprintf(openTitle, "%s", argv[2]);
+        load_state = 1;
+    }
+    if(argc >= 5 && strcmp(argv[1], "export") == 0)
+    {
+        sprintf(openTitle, "%s", argv[2]);
+
+        if     (strcmp(argv[3], "txt") == 0){export_type=1;}
+        else if(strcmp(argv[3], "ogl") == 0){export_type=2;}
+        else if(strcmp(argv[3], "ply") == 0){export_type=3;}
+
+        sprintf(export_path, "%s", argv[4]);
+    }
+    // printf("%s\n", argv[1]);
     char nt[512];
     sprintf(nt, "%s - %s", appTitle, openTitle);
     SDL_SetWindowTitle(wnd, nt);
@@ -1090,6 +1100,36 @@ int main(int argc, char** argv)
             printf("[%s] Opened: %s%s.wox.gz\n", tmp, appdir, openTitle);
         else
             printf("[%s] Opened: %s\n", tmp, openTitle);
+    }
+
+    // if this is just an export job then export and quit.
+    if(export_path[0] != 0x00)
+    {
+        if(export_type == 0){saveState(export_path, "", 1);}
+        if(export_type == 1)
+        {
+            FILE* f = fopen(export_path, "w");
+            if(f != NULL)
+            {
+                fprintf(f, "# %s %s\n", appTitle, appVersion);
+                fprintf(f, "# X Y Z RRGGBB\n");
+                for(uint i = 0; i < max_voxels; i++)
+                {
+                    if(g.voxels[i] == 0){continue;}
+                    const vec p = ITP(i);
+                    const uint tu = g.colors[g.voxels[i]];
+                    uchar r = (tu & 0x00FF0000) >> 16;
+                    uchar gc = (tu & 0x0000FF00) >> 8;
+                    uchar b = (tu & 0x000000FF);
+                    fprintf(f, "%g %g %g %02X%02X%02X\n", p.x,p.y,p.z, r,gc,b);
+                }
+                fclose(f);
+                char tmp[16];
+                timestamp(tmp);
+                printf("[%s] Exported TXT: %s\n", tmp, export_path);
+            }
+        }
+        return 0;
     }
 
     // set sclr
