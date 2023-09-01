@@ -88,6 +88,7 @@ void main_loop()
                 else if(event.key.keysym.sym == SDLK_SLASH || event.key.keysym.sym == SDLK_x) // - change selected node
                 {
                     traceViewPath(0);
+                    if(lray == -1){break;}
                     if(g.voxels[lray] < 8){g.voxels[lray] = 9;}
                     if(lray > -1 && g.voxels[lray] > 8){g.voxels[lray]--; g.st = g.voxels[lray];}
                     else
@@ -108,6 +109,7 @@ void main_loop()
                 else if(event.key.keysym.sym == SDLK_QUOTE || event.key.keysym.sym == SDLK_c) // + change selected node
                 {
                     traceViewPath(0);
+                    if(lray == -1){break;}
                     if(g.voxels[lray] < 8){g.voxels[lray] = 9;}
                     if(lray > -1 && g.voxels[lray] < 39){g.voxels[lray]++; g.st = g.voxels[lray];}
                     else
@@ -121,22 +123,28 @@ void main_loop()
                 {
                     ptt = t+rrsp;
                     traceViewPath(1);
-                    if(lray > -1 && g.pb.w == 1){g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = g.st;}
-                    if(mirror == 1)
+                    if(lray > -1)
                     {
-                        const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
-                        g.voxels[PTI(x, g.pb.y, g.pb.z)] = g.st;
+                        if(g.pb.w == 1){g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = g.st;}
+                        if(mirror == 1)
+                        {
+                            const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
+                            g.voxels[PTI(x, g.pb.y, g.pb.z)] = g.st;
+                        }
                     }
                 }
                 else if(event.key.keysym.sym == SDLK_RCTRL) // remove pointed voxel
                 {
                     dtt = t+rrsp;
                     traceViewPath(0);
-                    if(lray > -1){g.voxels[lray] = 0;}
-                    if(mirror == 1)
+                    if(lray > -1)
                     {
-                        const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
-                        g.voxels[PTI(x, ghp.y, ghp.z)] = 0;
+                        g.voxels[lray] = 0;
+                        if(mirror == 1)
+                        {
+                            const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
+                            g.voxels[PTI(x, ghp.y, ghp.z)] = 0;
+                        }
                     }
                 }
                 else if(event.key.keysym.sym == SDLK_q || event.key.keysym.sym == SDLK_z) // clone pointed voxel color
@@ -153,11 +161,14 @@ void main_loop()
                 {
                     rtt = t+rrsp;
                     traceViewPath(0);
-                    if(lray > -1){g.voxels[lray] = g.st;}
-                    if(mirror == 1)
+                    if(lray > -1)
                     {
-                        const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
-                        g.voxels[PTI(x, ghp.y, ghp.z)] = g.st;
+                        g.voxels[lray] = g.st;
+                        if(mirror == 1)
+                        {
+                            const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
+                            g.voxels[PTI(x, ghp.y, ghp.z)] = g.st;
+                        }
                     }
                 }
                 else if(event.key.keysym.sym == SDLK_r) // toggle mirror brush
@@ -323,14 +334,17 @@ void main_loop()
                     ptt = t+rrsp;
                     traceViewPath(1);
                     //printf("L: %u %f %u\n", lray, g.pb.w, g.voxels[lray]);
-                    if(lray > -1 && g.pb.w == 1 && isInBounds(g.pb) && g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] == 0)
-                        g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = g.st;
-                    
-                    if(mirror == 1)
+                    if(lray > -1)
                     {
-                        const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
-                        g.voxels[PTI(x, g.pb.y, g.pb.z)] = g.st;
-                        //printf("%f %f %f\n", x, g.pb.y, g.pb.z);
+                        if(g.pb.w == 1 && isInBounds(g.pb) && g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] == 0)
+                            g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = g.st;
+                    
+                        if(mirror == 1)
+                        {
+                            const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
+                            g.voxels[PTI(x, g.pb.y, g.pb.z)] = g.st;
+                            //printf("%f %f %f\n", x, g.pb.y, g.pb.z);
+                        }
                     }
                 }
                 else if(event.button.button == SDL_BUTTON_RIGHT) // remove pointed voxel
@@ -338,12 +352,15 @@ void main_loop()
                     dtt = t+rrsp;
                     traceViewPath(0);
                     //printf("R: %u %f %u\n", lray, g.pb.w, g.voxels[lray]);
-                    if(lray > -1){g.voxels[lray] = 0;}
-                    if(mirror == 1)
+                    if(lray > -1)
                     {
-                        const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
-                        g.voxels[PTI(x, ghp.y, ghp.z)] = 0;
-                        //printf("%f %f %f\n", x, g.pb.y, g.pb.z);
+                        g.voxels[lray] = 0;
+                        if(mirror == 1)
+                        {
+                            const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
+                            g.voxels[PTI(x, ghp.y, ghp.z)] = 0;
+                            //printf("%f %f %f\n", x, g.pb.y, g.pb.z);
+                        }
                     }
                 }
                 else if(event.button.button == SDL_BUTTON_MIDDLE || event.button.button == SDL_BUTTON_X1) // clone pointed voxel
@@ -359,11 +376,14 @@ void main_loop()
                 {
                     rtt = t+rrsp;
                     traceViewPath(0);
-                    if(lray > -1){g.voxels[lray] = g.st;}
-                    if(mirror == 1)
+                    if(lray > -1)
                     {
-                        const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
-                        g.voxels[PTI(x, ghp.y, ghp.z)] = g.st;
+                        g.voxels[lray] = g.st;
+                        if(mirror == 1)
+                        {
+                            const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
+                            g.voxels[PTI(x, ghp.y, ghp.z)] = g.st;
+                        }
                     }
                 }
                 idle = t;
@@ -413,11 +433,14 @@ void main_loop()
         if(ptt != 0.f && t > ptt) // place trigger
         {
             traceViewPath(1);
-            if(lray > -1 && g.pb.w == 1){g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = g.st;}
-            if(mirror == 1)
+            if(lray > -1)
             {
-                const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
-                g.voxels[PTI(x, g.pb.y, g.pb.z)] = g.st;
+                if(g.pb.w == 1){g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = g.st;}
+                if(mirror == 1)
+                {
+                    const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
+                    g.voxels[PTI(x, g.pb.y, g.pb.z)] = g.st;
+                }
             }
             ptt = t+0.1;
         }
@@ -425,11 +448,14 @@ void main_loop()
         if(dtt != 0.f && t > dtt) // delete trigger
         {
             traceViewPath(0);
-            if(lray > -1){g.voxels[lray] = 0;}
-            if(mirror == 1)
+            if(lray > -1)
             {
-                const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
-                g.voxels[PTI(x, ghp.y, ghp.z)] = 0;
+                g.voxels[lray] = 0;
+                if(mirror == 1)
+                {
+                    const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
+                    g.voxels[PTI(x, ghp.y, ghp.z)] = 0;
+                }
             }
             dtt = t+0.1f;
         }
@@ -437,7 +463,15 @@ void main_loop()
         if(rtt != 0.f && t > rtt) // replace trigger
         {
             traceViewPath(0);
-            if(lray > -1){g.voxels[lray] = g.st;}
+            if(lray > -1)
+            {
+                g.voxels[lray] = g.st;
+                if(mirror == 1)
+                {
+                    const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
+                    g.voxels[PTI(x, ghp.y, ghp.z)] = g.st;
+                }
+            }
             rtt = t+0.1f;
         }
 
