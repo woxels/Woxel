@@ -1143,7 +1143,7 @@ int main(int argc, char** argv)
     printf("To load from file: ./wox loadgz <file_path>\n");
     printf("e.g; ./wox loadgz /home/user/file.wox.gz\n\n");
     printf("To export: ./wox export <project_name> <option: wox,txt> <export_path>\n");
-    printf("e.g; ./wox export ply /home/user/file.ply\n\n");
+    printf("e.g; ./wox export txt /home/user/file.txt\n\n");
     printf("Find more color palettes at; https://lospec.com/palette-list\n");
     printf("You can use any palette upto 32 colors. But don't use #000000 (Black)\nin your color palette as it will terminate at that color.\n\n");
     printf("Default 32 Color Palette: https://lospec.com/palette-list/resurrect-32\n");
