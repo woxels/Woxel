@@ -141,12 +141,12 @@ uint isInBounds(const vec p)
 //     if(p.z > 127.5f){p.z = 127.5f;}
 //     return 1;
 // }
-// uint PTIB(const uchar x, const uchar y, const uchar z) // 0-128
-// {
-//     uint r = (z * 16384) + (y * 128) + x;
-//     if(r > max_voxels-1){r = max_voxels-1;}
-//     return r;
-// }
+uint PTIB(const uchar x, const uchar y, const uchar z) // 0-128
+{
+    uint r = (z * 16384) + (y * 128) + x;
+    if(r > max_voxels-1){r = max_voxels-1;}
+    return r;
+}
 
 //*************************************
 // ray functions
