@@ -553,13 +553,23 @@ void main_loop()
     ipp = g.pp; // inverse player position (setting global 'ipp' here is perfect)
     vInv(&ipp); // <--
     glUniformMatrix4fv(view_id, 1, GL_FALSE, (float*)&view.m[0][0]);
-    for(uint j = 0; j < max_voxels; j++)
+    for(uint i = 0; i < max_voxels; i++)
     {
-        if(g.voxels[j] == 0){continue;}
-        const float fj = (float)j;
-        const vec vpos = ITP(fj);
-        glUniform2f(voxel_id, fj, g.colors[g.voxels[j]-1]);
-        glDrawElements(GL_TRIANGLES, voxel_numind, GL_UNSIGNED_BYTE, 0);
+        if(g.voxels[i] == 0){continue;}
+        // const vec vpos = ITP(i);
+        // if( vpos.x <= 1.f || vpos.y <= 1.f || vpos.z <= 1.f || // this line is not perfect and float accuracy from ITP() causes slight over-rendering
+        //     vpos.x >= 127.f || vpos.y >= 127.f || vpos.z >= 127.f ||
+        //     g.voxels[PTIB(vpos.x-1, vpos.y, vpos.z)] == 0 || // check if generally occluded (not by lookdir)
+        //     g.voxels[PTIB(vpos.x+1, vpos.y, vpos.z)] == 0 ||
+        //     g.voxels[PTIB(vpos.x, vpos.y-1, vpos.z)] == 0 ||
+        //     g.voxels[PTIB(vpos.x, vpos.y+1, vpos.z)] == 0 ||
+        //     g.voxels[PTIB(vpos.x, vpos.y, vpos.z-1)] == 0 ||
+        //     g.voxels[PTIB(vpos.x, vpos.y, vpos.z+1)] == 0 )
+        // {
+            const float fi = (float)i;
+            glUniform2f(voxel_id, fi, g.colors[g.voxels[i]-1]);
+            glDrawElements(GL_TRIANGLES, voxel_numind, GL_UNSIGNED_BYTE, 0);
+        // }
     }
 
     // canvas frame
@@ -966,7 +976,7 @@ int main(int argc, char** argv)
     printf("color on each new line, 32 colors maximum. e.g; \"#00FFFF\".\n\n");
     printf("To load from file: ./wox loadgz <file_path>\n");
     printf("e.g; ./wox loadgz /home/user/file.wox.gz\n\n");
-    printf("To export: ./wox export <project_name> <option: wox,txt,ogl,ply> <export_path>\n");
+    printf("To export: ./wox export <project_name> <option: wox,txt> <export_path>\n");
     printf("e.g; ./wox export ply /home/user/file.ply\n\n");
     printf("Find more color palettes at; https://lospec.com/palette-list\n");
     printf("You can use any palette upto 32 colors. But don't use #000000 (Black)\nin your color palette as it will terminate at that color.\n\n");
@@ -1010,8 +1020,8 @@ int main(int argc, char** argv)
         sprintf(openTitle, "%s", argv[2]);
 
         if     (strcmp(argv[3], "txt") == 0){export_type=1;}
-        else if(strcmp(argv[3], "ogl") == 0){export_type=2;}
-        else if(strcmp(argv[3], "ply") == 0){export_type=3;}
+        // else if(strcmp(argv[3], "ogl") == 0){export_type=2;}
+        // else if(strcmp(argv[3], "ply") == 0){export_type=3;}
 
         sprintf(export_path, "%s", argv[4]);
     }
@@ -1102,6 +1112,8 @@ int main(int argc, char** argv)
         else
             printf("[%s] Opened: %s\n", tmp, openTitle);
     }
+
+    //memset(&g.voxels, 8, max_voxels);
 
     // if this is just an export job then export and quit.
     if(export_path[0] != 0x00)
