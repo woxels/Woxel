@@ -73,6 +73,8 @@ uint fks = 0;           // F-Key state (fast mode toggle)
 float bigc = 0.f;       // big cursor start time
 Uint32 sclr = 0;        // selected color
 uint load_state = 0;    // loaded from appdir or custom path?
+uint mirror = 0;        // mirror brush state
+vec ghp;                // global ray hit position
 
 //*************************************
 // game state functions
@@ -178,14 +180,13 @@ void traceViewPath(const uint face)
 {
     g.pb.w = -1.f; // pre-set as failed
     vec rp;
-    vec hp;
-    lray = ray(&hp, &rp, RAY_DEPTH, RAY_STEP, ipp);
-    //printf("TVP: %u: %f %f %f - %f %f %f\n", lray, hp.x, hp.y, hp.z, ipp.x, ipp.y, ipp.z);
+    lray = ray(&ghp, &rp, RAY_DEPTH, RAY_STEP, ipp);
+    //printf("TVP: %u: %f %f %f - %f %f %f\n", lray, ghp.x, ghp.y, ghp.z, ipp.x, ipp.y, ipp.z);
     if(lray > -1 && face == 1)
     {
         vNorm(&rp);
         vec diff = rp;
-        rp = hp;
+        rp = ghp;
 
         vec fd = diff;
         fd.x = fabsf(diff.x);
