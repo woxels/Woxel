@@ -530,6 +530,8 @@ void main_loop()
     mRotate(&view, g.xrot, 0.f, 0.f, 1.f);
     mTranslate(&view, g.pp.x, g.pp.y, g.pp.z);
 
+    if(g.plock == 1){mGetViewZ(&look_dir, view);} // refresh
+
 //*************************************
 // begin render
 //*************************************
@@ -771,6 +773,34 @@ void drawHud(const uint type)
             setpixel(sHud, winw2-3, winh2, sclr);
             setpixel(sHud, winw2, winh2+3, sclr);
             setpixel(sHud, winw2, winh2-3, sclr);
+
+            if(g.plock == 1)
+            {
+                setpixel(sHud, winw2+4, winh2, sclr);
+                setpixel(sHud, winw2-4, winh2, sclr);
+                setpixel(sHud, winw2+5, winh2, sclr);
+                setpixel(sHud, winw2-5, winh2, sclr);
+            }
+
+            if(mirror == 1)
+            {
+                setpixel(sHud, winw2+2, winh2+2, sclr);
+                //
+                setpixel(sHud, winw2+3, winh2+2, sclr);
+                setpixel(sHud, winw2-3, winh2-2, sclr);
+                setpixel(sHud, winw2+2, winh2+3, sclr);
+                setpixel(sHud, winw2-2, winh2-3, sclr);
+                //
+                setpixel(sHud, winw2+4, winh2+2, sclr);
+                setpixel(sHud, winw2-4, winh2-2, sclr);
+                setpixel(sHud, winw2+2, winh2+4, sclr);
+                setpixel(sHud, winw2-2, winh2-4, sclr);
+                //
+                setpixel(sHud, winw2+5, winh2+2, sclr);
+                setpixel(sHud, winw2-5, winh2-2, sclr);
+                setpixel(sHud, winw2+2, winh2+5, sclr);
+                setpixel(sHud, winw2-2, winh2-5, sclr);
+            }
         }
 
         const int hso = winw2-175;
