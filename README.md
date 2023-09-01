@@ -3,22 +3,22 @@
 Mouse locks when you click on the game window, press ESCAPE/TAB to unlock the mouse.
 
 #### Input Mapping
-W,A,S,D = Move around based on relative orientation to X and Y.
-SPACE + L-SHIFT = Move up and down relative Z.
-Left Click / R-SHIFT = Place node.
-Right Click / R-CTRL = Delete node.
-V = Places voxel at current position.
-Q / Z / Middle Click / Mouse4 = Clone color of pointed node.
-E / Mouse5 = Replace color of pointed node.
-F = Toggle player fast speed on and off.
-1-7 = Change move speed for selected fast state.
-X + C / Slash + Quote = Scroll color of pointed node.
-R = Toggle mirror brush.
-P = Toggle pitch lock.
-F1 = Resets environment state back to default.
-F2 = Toggle HUD visibility.
-F3 = Save. (auto saves on exit, backup made if idle for 3 mins.)
-F8 = Load. (will erase what you have done since the last save)
+* **W,A,S,D** = Move around based on relative orientation to X and Y.
+* **SPACE** + **L-SHIFT** = Move up and down relative Z.
+* **Left Click** / **R-SHIFT** = Place node.
+* Right Click / R-CTRL = Delete node.
+* **V** = Places voxel at current position.
+* **Q** / **Z** / **Middle Click** / **Mouse4** = Clone color of pointed node.
+* **E** / **Mouse5** = Replace color of pointed node.
+* **F** = Toggle player fast speed on and off.
+* **1-7** = Change move speed for selected fast state.
+* **X** + **C** / **Slash** + **Quote** = Scroll color of pointed node.
+* **R** = Toggle mirror brush.
+* **P** = Toggle pitch lock.
+* **F1** = Resets environment state back to default.
+* **F2** = Toggle HUD visibility.
+* **F3** = Save. (auto saves on exit, backup made if idle for 3 mins.)
+* **F8** = Load. (will erase what you have done since the last save)
 
 * Arrow Keys can be used to move the view around.
 * Your state is automatically saved on exit.
