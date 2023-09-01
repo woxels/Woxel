@@ -88,9 +88,12 @@ void main_loop()
                 else if(event.key.keysym.sym == SDLK_SLASH || event.key.keysym.sym == SDLK_x) // - change selected node
                 {
                     traceViewPath(0);
-                    if(lray == -1){break;}
-                    if(g.voxels[lray] < 8){g.voxels[lray] = 9;}
-                    if(lray > -1 && g.voxels[lray] > 8){g.voxels[lray]--; g.st = g.voxels[lray];}
+                    if(lray > -1 && g.voxels[lray] > 8)
+                    {
+                        if(g.voxels[lray] < 8){g.voxels[lray] = 9;}
+                        g.voxels[lray]--;
+                        g.st = g.voxels[lray];
+                    }
                     else
                     {
                         g.st -= 1.f;
@@ -109,9 +112,12 @@ void main_loop()
                 else if(event.key.keysym.sym == SDLK_QUOTE || event.key.keysym.sym == SDLK_c) // + change selected node
                 {
                     traceViewPath(0);
-                    if(lray == -1){break;}
-                    if(g.voxels[lray] < 8){g.voxels[lray] = 9;}
-                    if(lray > -1 && g.voxels[lray] < 39){g.voxels[lray]++; g.st = g.voxels[lray];}
+                    if(lray > -1 && g.voxels[lray] < 39)
+                    {
+                        if(g.voxels[lray] < 8){g.voxels[lray] = 9;}
+                        g.voxels[lray]++;
+                        g.st = g.voxels[lray];
+                    }
                     else
                     {
                         g.st += 1.f;
