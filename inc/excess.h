@@ -8,7 +8,6 @@
 */
 
 #pragma GCC diagnostic ignored "-Wtrigraphs"
-#define forceinline __attribute__((always_inline)) inline
 
 #include <time.h>
 #include <zlib.h>
@@ -17,9 +16,6 @@
 #include <SDL2/SDL_opengles2.h>
 
 #ifdef __linux__
-    #include <unistd.h>
-    #include <sys/stat.h>
-    #include <sys/types.h>
     #include <sys/time.h>
     #include <locale.h>
 #endif
@@ -99,7 +95,7 @@ typedef struct
 game_state;
 game_state g;
 // point to index & vice-versa
-forceinline uint PTI(const uchar x, const uchar y, const uchar z) // 0-128
+uint PTI(const uchar x, const uchar y, const uchar z) // 0-128
 {
     return (z * 16384) + (y * 128) + x;
 }
@@ -137,10 +133,26 @@ uint placedVoxels()
         if(g.voxels[i] != 0){c++;}
     return c;
 }
-forceinline uint isInBounds(const vec p)
+uint isInBounds(const vec p)
 {
     if(p.x < -0.5f || p.y < -0.5f || p.z < -0.5f || p.x > 127.5f || p.y > 127.5f || p.z > 127.5f){return 0;}
     return 1;
+}
+uint forceInBounds(vec p)
+{
+    if(p.x < -0.5f){p.x = -0.5f;}
+    if(p.y < -0.5f){p.y = -0.5f;}
+    if(p.z < -0.5f){p.z = -0.5f;}
+    if(p.x > 127.5f){p.x = 127.5f;}
+    if(p.y > 127.5f){p.y = 127.5f;}
+    if(p.z > 127.5f){p.z = 127.5f;}
+    return 1;
+}
+uint PTIB(const uchar x, const uchar y, const uchar z) // 0-128
+{
+    uint r = (z * 16384) + (y * 128) + x;
+    if(r > max_voxels-1){r = max_voxels-1;}
+    return r;
 }
 
 //*************************************
@@ -215,7 +227,7 @@ void traceViewPath(const uint face)
 // utility functions
 //*************************************
 void timestamp(char* ts){const time_t tt = time(0);strftime(ts, 16, "%H:%M:%S", localtime(&tt));}
-forceinline float fTime(){return ((float)SDL_GetTicks())*0.001f;}
+float fTime(){return ((float)SDL_GetTicks())*0.001f;}
 #ifdef __linux__
     uint64_t microtime()
     {
@@ -224,16 +236,6 @@ forceinline float fTime(){return ((float)SDL_GetTicks())*0.001f;}
         memset(&tz, 0, sizeof(struct timezone));
         gettimeofday(&tv, &tz);
         return 1000000 * tv.tv_sec + tv.tv_usec;
-    }
-    uint dirExist(const char* dir)
-    {
-        struct stat st;
-        return (stat(dir, &st) == 0 && S_ISDIR(st.st_mode));
-    }
-    uint fileExist(const char* file)
-    {
-        struct stat st;
-        return (stat(file, &st) == 0);
     }
 #endif
 void loadColors(const char* file)
@@ -365,12 +367,12 @@ SDL_Surface* surfaceFromData(const Uint32* data, Uint32 w, Uint32 h)
     memcpy(s->pixels, data, s->pitch*h);
     return s;
 }
-forceinline Uint32 getpixel(const SDL_Surface *surface, Uint32 x, Uint32 y)
+Uint32 getpixel(const SDL_Surface *surface, Uint32 x, Uint32 y)
 {
     const Uint8 *p = (Uint8*)surface->pixels + y * surface->pitch + x * surface->format->BytesPerPixel;
     return *(Uint32*)p;
 }
-forceinline void setpixel(SDL_Surface *surface, Uint32 x, Uint32 y, Uint32 pix)
+void setpixel(SDL_Surface *surface, Uint32 x, Uint32 y, Uint32 pix)
 {
     const Uint8* pixel = (Uint8*)surface->pixels + (y * surface->pitch) + (x * surface->format->BytesPerPixel);
     *((Uint32*)pixel) = pix;
