@@ -990,17 +990,34 @@ int main(int argc, char** argv)
             {
                 fprintf(f, "# %s %s\n", appTitle, appVersion);
                 fprintf(f, "# X Y Z RRGGBB\n");
-                for(uint i = 0; i < max_voxels; i++)
+                for(uchar z = 0; z < 128; z++)
                 {
-                    if(g.voxels[i] < 8){continue;}
-                    const vec p = ITP(i);
-                    const uint tu = g.colors[g.voxels[i]-1];
-                    uchar r = (tu & 0x00FF0000) >> 16;
-                    uchar gc = (tu & 0x0000FF00) >> 8;
-                    uchar b = (tu & 0x000000FF);
-                    if(r != 0 && gc != 0 && b != 0)
-                        fprintf(f, "%g %g %g %02X%02X%02X\n", p.x-64.f,p.y-64.f,p.z, r,gc,b);
+                    for(uchar y = 0; y < 128; y++)
+                    {
+                        for(uchar x = 0; x < 128; x++)
+                        {
+                            const uint i = PTI(x,y,z);
+                            if(g.voxels[i] < 8){continue;}
+                            const uint tu = g.colors[g.voxels[i]-1];
+                            uchar r = (tu & 0x00FF0000) >> 16;
+                            uchar gc = (tu & 0x0000FF00) >> 8;
+                            uchar b = (tu & 0x000000FF);
+                            if(r != 0 && gc != 0 && b != 0)
+                                fprintf(f, "%i %i %i %02X%02X%02X\n", ((int)x)-64, ((int)y)-64, z, r, gc, b);
+                        }
+                    }
                 }
+                // for(uint i = 0; i < max_voxels; i++)
+                // {
+                //     if(g.voxels[i] < 8){continue;}
+                //     const vec p = ITP(i);
+                //     const uint tu = g.colors[g.voxels[i]-1];
+                //     uchar r = (tu & 0x00FF0000) >> 16;
+                //     uchar gc = (tu & 0x0000FF00) >> 8;
+                //     uchar b = (tu & 0x000000FF);
+                //     if(r != 0 && gc != 0 && b != 0)
+                //         fprintf(f, "%g %g %g %02X%02X%02X\n", p.x-64.f,p.y-64.f,p.z, r,gc,b);
+                // }
                 fclose(f);
                 char tmp[16];
                 timestamp(tmp);
