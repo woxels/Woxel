@@ -560,26 +560,55 @@ void main_loop()
     ipp = g.pp; // inverse player position (setting global 'ipp' here is perfect)
     vInv(&ipp); // <--
     glUniformMatrix4fv(view_id, 1, GL_FALSE, (float*)&view.m[0][0]);
-    for(uint i = 0; i < max_voxels; i++)
+
+    // for(uint i = 0; i < max_voxels; i++)
+    // {
+    //     if(g.voxels[i] == 0){continue;}
+    //     // const vec vpos = ITP(i);
+    //     // if( vpos.x <= 1.f || vpos.y <= 1.f || vpos.z <= 1.f || // this line is not perfect and float accuracy from ITP() causes slight over-rendering
+    //     //     vpos.x >= 127.f || vpos.y >= 127.f || vpos.z >= 127.f ||
+    //     //     g.voxels[PTIB(vpos.x-1, vpos.y, vpos.z)] == 0 || // check if generally occluded (not by lookdir)
+    //     //     g.voxels[PTIB(vpos.x+1, vpos.y, vpos.z)] == 0 ||
+    //     //     g.voxels[PTIB(vpos.x, vpos.y-1, vpos.z)] == 0 ||
+    //     //     g.voxels[PTIB(vpos.x, vpos.y+1, vpos.z)] == 0 ||
+    //     //     g.voxels[PTIB(vpos.x, vpos.y, vpos.z-1)] == 0 ||
+    //     //     g.voxels[PTIB(vpos.x, vpos.y, vpos.z+1)] == 0 )
+    //     // {
+    //     if(g.colors[g.voxels[i]-1] != 0)
+    //     {
+    //         const float fi = (float)i;
+    //         glUniform2f(voxel_id, fi, g.colors[g.voxels[i]-1]);
+    //         glDrawElements(GL_TRIANGLES, voxel_numind, GL_UNSIGNED_BYTE, 0);
+    //     }
+    //     // }
+    // }
+
+    for(uchar z = 0; z < 128; z++)
     {
-        if(g.voxels[i] == 0){continue;}
-        // const vec vpos = ITP(i);
-        // if( vpos.x <= 1.f || vpos.y <= 1.f || vpos.z <= 1.f || // this line is not perfect and float accuracy from ITP() causes slight over-rendering
-        //     vpos.x >= 127.f || vpos.y >= 127.f || vpos.z >= 127.f ||
-        //     g.voxels[PTIB(vpos.x-1, vpos.y, vpos.z)] == 0 || // check if generally occluded (not by lookdir)
-        //     g.voxels[PTIB(vpos.x+1, vpos.y, vpos.z)] == 0 ||
-        //     g.voxels[PTIB(vpos.x, vpos.y-1, vpos.z)] == 0 ||
-        //     g.voxels[PTIB(vpos.x, vpos.y+1, vpos.z)] == 0 ||
-        //     g.voxels[PTIB(vpos.x, vpos.y, vpos.z-1)] == 0 ||
-        //     g.voxels[PTIB(vpos.x, vpos.y, vpos.z+1)] == 0 )
-        // {
-        if(g.colors[g.voxels[i]-1] != 0)
+        for(uchar y = 0; y < 128; y++)
         {
-            const float fi = (float)i;
-            glUniform2f(voxel_id, fi, g.colors[g.voxels[i]-1]);
-            glDrawElements(GL_TRIANGLES, voxel_numind, GL_UNSIGNED_BYTE, 0);
+            for(uchar x = 0; x < 128; x++)
+            {
+                if( x <=   0 || y <=   0 || z <=   0 ||
+                    x >= 127 || y >= 127 || z >= 127 ||
+                    g.voxels[PTIB(x-1, y, z)] == 0 || // check if generally occluded (not by lookdir)
+                    g.voxels[PTIB(x+1, y, z)] == 0 ||
+                    g.voxels[PTIB(x, y-1, z)] == 0 ||
+                    g.voxels[PTIB(x, y+1, z)] == 0 ||
+                    g.voxels[PTIB(x, y, z-1)] == 0 ||
+                    g.voxels[PTIB(x, y, z+1)] == 0 )
+                {
+                    const uint i = PTI(x,y,z);
+                    if(g.voxels[i] == 0){continue;}
+                    if(g.colors[g.voxels[i]-1] != 0)
+                    {
+                        const float fi = (float)i;
+                        glUniform2f(voxel_id, fi, g.colors[g.voxels[i]-1]);
+                        glDrawElements(GL_TRIANGLES, voxel_numind, GL_UNSIGNED_BYTE, 0);
+                    }
+                }
+            }
         }
-        // }
     }
 
     // canvas frame
