@@ -8,7 +8,7 @@ e.g; `./wox Untitled 0.003 /tmp/colors.txt`
 color on each new line, 32 colors maximum. e.g; "#00FFFF".
 
 #### Downloaded or external Wox files can be loaded via the command line:
-`./wox load wox_file_path`
+`./wox loadgz wox_file_path`
 
 #### Projects can be exported via the command line:
 `./wox export <project_name> <option: wox,csv,ogl,ply> <export_path>`
