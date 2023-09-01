@@ -1,6 +1,6 @@
 # Woxel
 
-Mouse locks when you click on the game window, press ESCAPE/TAB to unlock the mouse.
+### Mouse locks when you click on the game window, press ESCAPE/TAB to unlock the mouse.
 
 #### Input Mapping
 * **W,A,S,D** = Move around based on relative orientation to X and Y.
