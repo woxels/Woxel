@@ -6,7 +6,7 @@ Mouse locks when you click on the game window, press ESCAPE/TAB to unlock the mo
 * **W,A,S,D** = Move around based on relative orientation to X and Y.
 * **SPACE** + **L-SHIFT** = Move up and down relative Z.
 * **Left Click** / **R-SHIFT** = Place node.
-* Right Click / R-CTRL = Delete node.
+* **Right Click** / **R-CTRL** = Delete node.
 * **V** = Places voxel at current position.
 * **Q** / **Z** / **Middle Click** / **Mouse4** = Clone color of pointed node.
 * **E** / **Mouse5** = Replace color of pointed node.
