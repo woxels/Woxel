@@ -99,14 +99,14 @@ uint PTI(const uchar x, const uchar y, const uchar z) // 0-128
 {
     return (z * 16384) + (y * 128) + x;
 }
-vec ITP(const float i)
-{
-    const float z = i * 6.1035156E-5f; // i / 16384.f;
-    const float a = floorf(z);
-    const float b = (z-floorf(z)) * 128.f;
-    const float c = (b-floorf(b)) * 128.f;
-    return (vec){roundf(c),roundf(b),roundf(a)};
-}
+// vec ITP(const float i)
+// {
+//     const float z = i * 6.1035156E-5f; // i / 16384.f;
+//     const float a = floorf(z);
+//     const float b = (z-floorf(z)) * 128.f;
+//     const float c = (b-floorf(b)) * 128.f;
+//     return (vec){roundf(c),roundf(b),roundf(a)};
+// }
 void defaultState(const uint type)
 {
     g.sens = 0.003f;
@@ -138,22 +138,22 @@ uint isInBounds(const vec p)
     if(p.x < -0.5f || p.y < -0.5f || p.z < -0.5f || p.x > 127.5f || p.y > 127.5f || p.z > 127.5f){return 0;}
     return 1;
 }
-uint forceInBounds(vec p)
-{
-    if(p.x < -0.5f){p.x = -0.5f;}
-    if(p.y < -0.5f){p.y = -0.5f;}
-    if(p.z < -0.5f){p.z = -0.5f;}
-    if(p.x > 127.5f){p.x = 127.5f;}
-    if(p.y > 127.5f){p.y = 127.5f;}
-    if(p.z > 127.5f){p.z = 127.5f;}
-    return 1;
-}
-uint PTIB(const uchar x, const uchar y, const uchar z) // 0-128
-{
-    uint r = (z * 16384) + (y * 128) + x;
-    if(r > max_voxels-1){r = max_voxels-1;}
-    return r;
-}
+// uint forceInBounds(vec p)
+// {
+//     if(p.x < -0.5f){p.x = -0.5f;}
+//     if(p.y < -0.5f){p.y = -0.5f;}
+//     if(p.z < -0.5f){p.z = -0.5f;}
+//     if(p.x > 127.5f){p.x = 127.5f;}
+//     if(p.y > 127.5f){p.y = 127.5f;}
+//     if(p.z > 127.5f){p.z = 127.5f;}
+//     return 1;
+// }
+// uint PTIB(const uchar x, const uchar y, const uchar z) // 0-128
+// {
+//     uint r = (z * 16384) + (y * 128) + x;
+//     if(r > max_voxels-1){r = max_voxels-1;}
+//     return r;
+// }
 
 //*************************************
 // ray functions
