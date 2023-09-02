@@ -726,6 +726,10 @@ void drawHud(const uint type)
         a = drawText(sHud, "V ", left, top, 2);
         drawText(sHud, "Place node at current location.", a, top, 1);
 
+        top += 11;
+        a = drawText(sHud, "R ", left, top, 2);
+        drawText(sHud, "Toggle mirror brush.", a, top, 1);
+
         top += 22;
         a = drawText(sHud, "Middle Scroll ", left, top, 2);
         drawText(sHud, "Change selected color.", a, top, 1);
@@ -751,10 +755,6 @@ void drawHud(const uint type)
         a = drawText(sHud, "-", a, top, 4);
         a = drawText(sHud, "7 ", a, top, 2);
         drawText(sHud, "Change move speed for selected fast state.", a, top, 1);
-
-        top += 11;
-        a = drawText(sHud, "R ", left, top, 2);
-        drawText(sHud, "Toggle mirror brush.", a, top, 1);
 
         top += 11;
         a = drawText(sHud, "P ", left, top, 2);
