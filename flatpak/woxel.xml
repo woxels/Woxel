@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<application>
+	<id type="desktop">woxel.desktop</id>
+	<metadata_license>CC-BY-4.0</metadata_license>
+	<project_license>GPL-2.0-only</project_license>
+	<name>Woxel</name>
+	<summary>Open Source 3D voxel editor that's better than Goxel ;p</summary>
+	<description>
+		<p>Mouse locks when you click on the game window, press ESCAPE or TAB to unlock the mouse.</p>
+		<ul>
+			<li>W,A,S,D = Move around based on relative orientation to X and Y.</li>
+			<li>SPACE + L-SHIFT = Move up and down relative Z.</li>
+			<li>Left Click / R-SHIFT = Place node.</li>
+			<li>Right Click / R-CTRL = Delete node.</li>
+			<li>V = Places voxel at current position</li>
+			<li>Q / Z / Middle Click / Mouse4 = Clone color of pointed node.</li>
+			<li>E / Mouse5 = Replace color of pointed node.</li>
+			<li>F = Toggle player fast speed on and off.</li>
+			<li>1-7 = Change move speed for selected fast state.</li>
+			<li>X + C / Slash + Quote = Change texture of pointed node.</li>
+			<li>R = Toggle mirror brush.</li>
+			<li>P = Toggle pitch lock.</li>
+			<li>F1 = Resets environment state back to default.</li>
+			<li>F1 = Resets environment state back to default.</li>
+			<li>F3 = Save. (auto saves on exit or idle for more than 3 minutes)</li>
+			<li>F8 = Load. (will erase what you have done since the last save)</li>
+		</ul>
+		<p>Arrow Keys can be used to move the view around.</p>
+		<p>Your state is automatically saved on exit.</p>
+		<p>Check the console output for more information, arguments can be passed to the program to export your project, create a new project, load a project from file, change mouse sensitivity and apply custom color palettes to projects.</p>
+	</description>
+	<screenshots>
+		<screenshot>https://raw.githubusercontent.com/woxels/woxels.github.io/main/Screenshot_2023-09-02_07-06-18.png</screenshot>
+	</screenshots>
+	<url type="homepage">https://woxels.github.io</url>
+	<releases>
+		<release version="1.0" date="2023-08-31" />
+	</releases>
+	<content_rating type="oars-1.0" />
+</application>
