@@ -26,7 +26,7 @@
 
 *Your state is automatically saved on exit.*
 
-#### Console Arguments:
+## Console Arguments:
 e.g; `./wox Untitled 0.003 /tmp/colors.txt`
 * 1st, "Untitled", Name of project to open or create.
 * 2nd, "0.003", Mouse sensitivity.
