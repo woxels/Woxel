@@ -1,5 +1,7 @@
 # Woxel
 
+![screenshot](https://raw.githubusercontent.com/woxels/woxels.github.io/main/Screenshot_2023-09-02_07-06-18.png)
+
 ### Mouse locks when you click on the game window, press ESCAPE / TAB to unlock the mouse.
 
 ## Input Mapping
