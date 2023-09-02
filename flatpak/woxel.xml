@@ -13,12 +13,12 @@
 			<li>Left Click / R-SHIFT = Place node.</li>
 			<li>Right Click / R-CTRL = Delete node.</li>
 			<li>V = Places voxel at current position</li>
+			<li>R = Toggle mirror brush.</li>
 			<li>Q / Z / Middle Click / Mouse4 = Clone color of pointed node.</li>
 			<li>E / Mouse5 = Replace color of pointed node.</li>
 			<li>F = Toggle player fast speed on and off.</li>
 			<li>1-7 = Change move speed for selected fast state.</li>
 			<li>X + C / Slash + Quote = Change texture of pointed node.</li>
-			<li>R = Toggle mirror brush.</li>
 			<li>P = Toggle pitch lock.</li>
 			<li>F1 = Resets environment state back to default.</li>
 			<li>F1 = Resets environment state back to default.</li>
