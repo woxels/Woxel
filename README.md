@@ -45,4 +45,3 @@ e.g; `./wox export txt /home/user/file.txt`
 * Find more color palettes at; https://lospec.com/palette-list
 * You can use any palette upto 32 colors. But don't use #000000 (Black) in your color palette as it will terminate at that color.
 * Default 32 Color Palette: https://lospec.com/palette-list/resurrect-32
-* Icon: http://www.forrestwalter.com/icons/
