@@ -634,6 +634,7 @@ void main_loop()
         {
             for(uchar x = 0; x < 128; x++)
             {
+                if(insideFrustum(x,y,z) == 0){continue;}
                 if( x <=   0 || y <=   0 || z <=   0 ||
                     x >= 127 || y >= 127 || z >= 127 ||
                     g.voxels[PTIB(x-1, y, z)] == 0 || // check if generally occluded (not by lookdir)
