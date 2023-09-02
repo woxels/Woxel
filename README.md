@@ -4,6 +4,8 @@
 
 ### Mouse locks when you click on the game window, press ESCAPE / TAB to unlock the mouse.
 
+**Note:** ply export option coming in version 1.1
+
 ## Input Mapping
 * **W,A,S,D** = Move around based on relative orientation to X and Y.
 * **SPACE** + **L-SHIFT** = Move up and down relative Z.
