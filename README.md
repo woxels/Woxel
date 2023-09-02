@@ -26,7 +26,7 @@
 
 *Your state is automatically saved on exit.*
 
-## Console Arguments:
+## Console Arguments
 e.g; `./wox Untitled 0.003 /tmp/colors.txt`
 * 1st, "Untitled", Name of project to open or create.
 * 2nd, "0.003", Mouse sensitivity.
@@ -39,6 +39,7 @@ e.g; `./wox loadgz /home/user/file.wox.gz`
 #### To export: ./wox export <project_name> <option: wox,txt> <export_path>
 e.g; `./wox export txt /home/user/file.txt`
 
+## Info
 * Find more color palettes at; https://lospec.com/palette-list
 * You can use any palette upto 32 colors. But don't use #000000 (Black) in your color palette as it will terminate at that color.
 * Default 32 Color Palette: https://lospec.com/palette-list/resurrect-32
