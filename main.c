@@ -851,17 +851,17 @@ void drawHud(const uint type)
             setpixel(sHud, winw2-3, winh2, sclr);
             setpixel(sHud, winw2, winh2+3, sclr);
             setpixel(sHud, winw2, winh2-3, sclr);
-
+            // now the part to prevent invisible crosshair
             setpixel(sHud, winw2+1, winh2+1, 0xCC000000);
             setpixel(sHud, winw2-1, winh2-1, 0xCC000000);
             setpixel(sHud, winw2-1, winh2+1, 0xCC000000);
             setpixel(sHud, winw2+1, winh2-1, 0xCC000000);
-
+            //
             setpixel(sHud, winw2+2, winh2+1, 0xCC000000);
             setpixel(sHud, winw2-2, winh2-1, 0xCC000000);
             setpixel(sHud, winw2-1, winh2+2, 0xCC000000);
             setpixel(sHud, winw2+1, winh2-2, 0xCC000000);
-
+            //
             setpixel(sHud, winw2+3, winh2+1, 0xCC000000);
             setpixel(sHud, winw2-3, winh2-1, 0xCC000000);
             setpixel(sHud, winw2-1, winh2+3, 0xCC000000);
