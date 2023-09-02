@@ -20,9 +20,9 @@
 * **F3** = Save. (auto saves on exit, backup made if idle for 3 mins.)
 * **F8** = Load. (will erase what you have done since the last save)
   
-Arrow Keys can be used to move the view around.
+*Arrow Keys can be used to move the view around.*
 
-Your state is automatically saved on exit.
+*Your state is automatically saved on exit.*
 
 #### Console Arguments:
 e.g; `./wox Untitled 0.003 /tmp/colors.txt`
