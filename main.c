@@ -852,6 +852,21 @@ void drawHud(const uint type)
             setpixel(sHud, winw2, winh2+3, sclr);
             setpixel(sHud, winw2, winh2-3, sclr);
 
+            setpixel(sHud, winw2+1, winh2+1, 0xCC000000);
+            setpixel(sHud, winw2-1, winh2-1, 0xCC000000);
+            setpixel(sHud, winw2-1, winh2+1, 0xCC000000);
+            setpixel(sHud, winw2+1, winh2-1, 0xCC000000);
+
+            setpixel(sHud, winw2+2, winh2+1, 0xCC000000);
+            setpixel(sHud, winw2-2, winh2-1, 0xCC000000);
+            setpixel(sHud, winw2-1, winh2+2, 0xCC000000);
+            setpixel(sHud, winw2+1, winh2-2, 0xCC000000);
+
+            setpixel(sHud, winw2+3, winh2+1, 0xCC000000);
+            setpixel(sHud, winw2-3, winh2-1, 0xCC000000);
+            setpixel(sHud, winw2-1, winh2+3, 0xCC000000);
+            setpixel(sHud, winw2+1, winh2-3, 0xCC000000);
+
             if(g.plock == 1)
             {
                 setpixel(sHud, winw2+4, winh2, sclr);
