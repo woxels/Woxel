@@ -88,11 +88,21 @@ void main_loop()
                 else if(event.key.keysym.sym == SDLK_SLASH || event.key.keysym.sym == SDLK_x) // - change selected node
                 {
                     traceViewPath(0);
-                    if(lray > -1 && g.voxels[lray] > 8)
+                    if(lray > -1 && g.voxels[lray] > 7)
                     {
-                        if(g.voxels[lray] < 8){g.voxels[lray] = 9;}
                         g.voxels[lray]--;
                         g.st = g.voxels[lray];
+                        if(g.st < 8.f || g.colors[g.voxels[lray]] == 0)
+                        {
+                            if(g.colors[0] != 0)
+                            {
+                                uint i = 7;
+                                for(NULL; i < 40 && g.colors[i] != 0; i++){}
+                                g.st = (float)(i-1);
+                                g.voxels[lray] = i-1;
+                            }
+                        }
+                        updateSelectColor();
                     }
                     else
                     {
@@ -101,7 +111,7 @@ void main_loop()
                         {
                             if(g.colors[0] != 0)
                             {
-                                uint i = 0;
+                                uint i = 7;
                                 for(NULL; i < 40 && g.colors[i] != 0; i++){}
                                 g.st = (float)(i-1);
                             }
@@ -112,11 +122,16 @@ void main_loop()
                 else if(event.key.keysym.sym == SDLK_QUOTE || event.key.keysym.sym == SDLK_c) // + change selected node
                 {
                     traceViewPath(0);
-                    if(lray > -1 && g.voxels[lray] < 39)
+                    if(lray > -1 && g.voxels[lray] > 7)
                     {
-                        if(g.voxels[lray] < 8){g.voxels[lray] = 9;}
                         g.voxels[lray]++;
                         g.st = g.voxels[lray];
+                        if(g.st > 39.f || g.colors[g.voxels[lray]] == 0)
+                        {
+                            g.st = 8.f;
+                            g.voxels[lray] = g.st;
+                        }
+                        updateSelectColor();
                     }
                     else
                     {
@@ -283,6 +298,7 @@ void main_loop()
                 {
                     g.st += 1.f;
                     if(g.st > 39.f || g.colors[(uint)g.st-1] == 0){g.st = 8.f;}
+                    updateSelectColor();
                 }
                 else if(event.wheel.y > 0)
                 {
@@ -291,14 +307,14 @@ void main_loop()
                     {
                         if(g.colors[0] != 0)
                         {
-                            uint i = 0;
-                            for(NULL; i < 40 && g.colors[i] != 0; i++){}
+                            uint i = 7;
+                            for(NULL; i < 39 && g.colors[i] != 0; i++){}
                             g.st = (float)(i);
                         }
                     }
+                    updateSelectColor();
                 }
                 //printf("%.2f %u\n", g.st, g.colors[(uint)g.st]);
-                updateSelectColor();
             }
             break;
 
@@ -634,7 +650,6 @@ void main_loop()
                     const float fi = (float)i;
                     glUniform2f(voxel_id, fi, rc);
                     glDrawElements(GL_TRIANGLES, voxel_numind, GL_UNSIGNED_BYTE, 0);
-
                 }
             }
         }
@@ -979,7 +994,6 @@ int main(int argc, char** argv)
     printf("Find more color palettes at; https://lospec.com/palette-list\n");
     printf("You can use any palette upto 32 colors. But don't use #000000 (Black)\nin your color palette as it will terminate at that color.\n\n");
     printf("Default 32 Color Palette: https://lospec.com/palette-list/resurrect-32\n");
-    printf("Unused Icon: http://www.forrestwalter.com/icons/\n");
     printf("\n----\n");
 
     // seed random
