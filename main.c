@@ -279,12 +279,12 @@ void main_loop()
 
                 bigc = t+0.5f;
 
-                if(event.wheel.y > 0)
+                if(event.wheel.y < 0)
                 {
                     g.st += 1.f;
                     if(g.st > 39.f || g.colors[(uint)g.st-1] == 0){g.st = 8.f;}
                 }
-                else if(event.wheel.y < 0)
+                else if(event.wheel.y > 0)
                 {
                     g.st -= 1.f;
                     if(g.st < 8.f || g.colors[(uint)g.st] == 0)
