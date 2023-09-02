@@ -352,6 +352,11 @@ void doPerspective()
     mPerspective(&projection, 60.0f, ww / wh, 1.0f, vdist);
     glUniformMatrix4fv(projection_id, 1, GL_FALSE, (float*)&projection.m[0][0]);
 }
+uint insideFrustum(const float x, const float y, const float z)
+{
+    const float xm = x+g.pp.x, ym = y+g.pp.y, zm = z+g.pp.z;
+    return (xm*look_dir.x) + (ym*look_dir.y) + (zm*look_dir.z) > 0.f; // check the angle
+}
 SDL_Surface* surfaceFromData(const Uint32* data, Uint32 w, Uint32 h)
 {
     SDL_Surface* s = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA32);
