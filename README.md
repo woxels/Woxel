@@ -5,7 +5,8 @@
 Woxel uses intuitive controls identical to Minetest or Minecraft, while providing a design experience similar to Goxel or Magicalvoxel.
 
 ## Download
-* **Flatpak:**
+* 🔗 **Flatpak:**
+* 🔗 **Ubuntu:**
 
 ## Input Mapping
 
