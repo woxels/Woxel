@@ -72,7 +72,11 @@ void main_loop()
                 else if(event.key.keysym.sym == SDLK_F2)
                 {
                     showhud = 1 - showhud;
-                    if(showhud == 0){shadeVoxel(&projection_id, &view_id, &position_id, &voxel_id);}
+                    if(showhud == 0)
+                    {
+                        shadeVoxel(&projection_id, &view_id, &position_id, &voxel_id);
+                        glUniformMatrix4fv(projection_id, 1, GL_FALSE, (float*)&projection.m[0][0]);
+                    }
                 }
                 if(focus_mouse == 0){break;}
                 if(event.key.keysym.sym == SDLK_w){ks[0] = 1;}
@@ -593,7 +597,7 @@ void main_loop()
     mRotate(&view, g.xrot, 0.f, 0.f, 1.f);
     mTranslate(&view, g.pp.x, g.pp.y, g.pp.z);
 
-    if(g.plock == 1){mGetViewZ(&look_dir, view);} // refresh
+    mGetViewZ(&look_dir, view); // refresh
 
 //*************************************
 // begin render
@@ -605,8 +609,11 @@ void main_loop()
 //*************************************
 
     // voxels
-    if(showhud == 1){shadeVoxel(&projection_id, &view_id, &position_id, &voxel_id);}
-    glUniformMatrix4fv(projection_id, 1, GL_FALSE, (float*)&projection.m[0][0]);
+    if(showhud == 1)
+    {
+        shadeVoxel(&projection_id, &view_id, &position_id, &voxel_id);
+        glUniformMatrix4fv(projection_id, 1, GL_FALSE, (float*)&projection.m[0][0]);
+    }
     glBindBuffer(GL_ARRAY_BUFFER, mdlVoxel.vid);
     glVertexAttribPointer(position_id, 3, GL_FLOAT, GL_FALSE, 0, 0);
     glEnableVertexAttribArray(position_id);
@@ -1392,6 +1399,8 @@ int main(int argc, char** argv)
     glEnable(GL_DEPTH_TEST);
     glLineWidth(0.f);
     glClearColor(0.f, 0.f, 0.f, 0.f);
+    shadeVoxel(&projection_id, &view_id, &position_id, &voxel_id);
+    glUniformMatrix4fv(projection_id, 1, GL_FALSE, (float*)&projection.m[0][0]);
 
 //*************************************
 // final init stuff
