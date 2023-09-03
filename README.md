@@ -2,8 +2,6 @@
 
 ![screenshot](https://raw.githubusercontent.com/woxels/woxels.github.io/main/Screenshot_2023-09-02_07-06-18.png)
 
-### Mouse locks when you click on the game window, press ESCAPE / TAB to unlock the mouse.
-
 ## Input Mapping
 
 ### Movement
@@ -29,10 +27,12 @@
 * **F3** = Save. (auto saves on exit, backup made if idle for 3 mins.)
 * **F8** = Load. (will erase what you have done since the last save)
 * **ESCAPE / TAB** = Toggle menu.
-  
-*Arrow Keys can be used to move the view around.*
 
-*Your state is automatically saved on exit.*
+### Mouse locks when you click on the game window, press ESCAPE / TAB to unlock the mouse.
+  
+### *Arrow Keys can be used to move the view around.*
+
+### *Your state is automatically saved on exit.*
 
 ## Console Arguments
 ### To create or load a project, change project mouse sensitivity, or update a projects color palette
