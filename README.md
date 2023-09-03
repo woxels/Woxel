@@ -4,6 +4,8 @@
 
 Woxel uses intuitive controls identical to Minetest or Minecraft, while providing a design experience similar to Goxel or Magicalvoxel.
 
+💬 Join our discord! https://discord.gg/AH23bGNE2h
+
 ## Download
 * 🔗 **Flatpak:**
 * 🔗 **Ubuntu:** https://github.com/woxels/Woxel/releases/download/1.0/wox
