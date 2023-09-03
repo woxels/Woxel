@@ -55,7 +55,7 @@ Woxel uses intuitive controls identical to Minetest or Minecraft, while providin
 * *e.g;* `./wox export txt /home/user/file.txt`
 * *e.g;* `./wox export ply /home/user/file.ply`
 
-*When exporting as `ply` you will want to merge vertices by distance in [Blender](https://www.blender.org/)
+🤔 *When exporting as `ply` you will want to merge vertices by distance in [Blender](https://www.blender.org/)
 or `Cleaning and Repairing > Merge Close Vertices` in [MeshLab](https://www.meshlab.net/).*
 
 ## Compile
