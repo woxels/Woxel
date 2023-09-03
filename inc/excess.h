@@ -155,10 +155,10 @@ int ray(vec* hit_pos, vec* hit_vec, const vec start_pos) // the look vector is a
 {
     // might need exclude conditions for obviously bogus rays to avoid those 2048 steps
     vec inc;
-    vMulS(&inc, look_dir, 0.0625f);
+    vMulS(&inc, look_dir, 0.015625f); // 0.0625f
     int hit = -1;
     vec rp = start_pos;
-    for(uint i = 0; i < 2048; i++)
+    for(uint i = 0; i < 8192; i++) // 2048
     {
         vAdd(&rp, rp, inc);
         if(isInBounds(rp) == 0){continue;} // break;
