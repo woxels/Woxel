@@ -37,22 +37,21 @@
 ## Console Arguments
 ### To create or load a project, change project mouse sensitivity, or update a projects color palette
 * `./wox <project_name> <[OPTIONAL]mouse_sensitivity> <[OPTIONAL]path to color palette>`
-* e.g; `./wox Untitled 0.003 /tmp/colors.txt`
+* *e.g;* `./wox Untitled 0.003 /tmp/colors.txt`
 * 1st, "Untitled", Name of project to open or create.
 * 2nd, "0.003", Mouse sensitivity.
-* 3rd, "/tmp/colors.txt", path to a color palette file, the file must contain a hex
-color on each new line, 32 colors maximum. e.g; "#00FFFF".
+* 3rd, "/tmp/colors.txt", path to a color palette file, the file must contain a hex color on each new line, 32 colors maximum. e.g; "#00FFFF".
 * Find color palettes at; https://lospec.com/palette-list
 * You can use any palette upto 32 colors. But don't use #000000 (Black) in your color palette as it will terminate at that color.
 
 ### To load `*.wox.gz` from file
 * `./wox loadgz <file_path>`
-* e.g; `./wox loadgz /home/user/file.wox.gz`
+* *e.g;* `./wox loadgz /home/user/file.wox.gz`
 
 ### To export mesh or voxels
 * `./wox export <project_name> <option: wox,txt,vv,ply> <export_path>`
-* e.g; `./wox export txt /home/user/file.txt`
-* e.g; `./wox export ply /home/user/file.ply`
+* *e.g;* `./wox export txt /home/user/file.txt`
+* *e.g;* `./wox export ply /home/user/file.ply`
 
 *When exporting as `ply` you will want to merge vertices by distance in [Blender](https://www.blender.org/)
 or `Cleaning and Repairing > Merge Close Vertices` in [MeshLab](https://www.meshlab.net/).*
