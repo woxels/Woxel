@@ -35,16 +35,17 @@
 *Your state is automatically saved on exit.*
 
 ## Console Arguments
+### To create a new project, change project mouse sensitivity, or update a projects color palette
 e.g; `./wox Untitled 0.003 /tmp/colors.txt`
 * 1st, "Untitled", Name of project to open or create.
 * 2nd, "0.003", Mouse sensitivity.
 * 3rd, "/tmp/colors.txt", path to a color palette file, the file must contain a hex
 color on each new line, 32 colors maximum. e.g; "#00FFFF".
 
-#### To load from file: ./wox loadgz <file_path>
+### To load from file: ./wox loadgz <file_path>
 e.g; `./wox loadgz /home/user/file.wox.gz`
 
-#### To export: ./wox export <project_name> <option: wox,txt,vv,ply> <export_path>
+### To export: ./wox export <project_name> <option: wox,txt,vv,ply> <export_path>
 e.g; `./wox export txt /home/user/file.txt`
 
 *When exporting as `ply` you will want to merge vertices by distance in [Blender](https://www.blender.org/)
