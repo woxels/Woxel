@@ -52,7 +52,7 @@ Woxel uses intuitive controls identical to Minetest or Minecraft, while providin
 * Find color palettes at; https://lospec.com/palette-list
 * You can use any palette upto 32 colors. But don't use #000000 (Black) in your color palette as it will terminate at that color.
 
-### 📂 "Load `*.wox.gz` from file
+### 📂 Load `*.wox.gz` from file
 * `./wox loadgz <file_path>`
 * *e.g;* `./wox loadgz /home/user/file.wox.gz`
 
