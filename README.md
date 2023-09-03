@@ -43,7 +43,7 @@ Woxel uses intuitive controls identical to Minetest or Minecraft, while providin
 #### ✔️ *Your state is automatically saved on exit.*
 
 ## Console Arguments
-### 📂🖱️🎨 To create or load a project, change project mouse sensitivity, or update a projects color palette
+### 📂🖱️🎨 Create or load a project, change project mouse sensitivity, or update a projects color palette
 * `./wox <project_name> <[OPTIONAL]mouse_sensitivity> <[OPTIONAL]path to color palette>`
 * *e.g;* `./wox Untitled 0.003 /tmp/colors.txt`
 * 1st, "Untitled", Name of project to open or create.
@@ -52,11 +52,11 @@ Woxel uses intuitive controls identical to Minetest or Minecraft, while providin
 * Find color palettes at; https://lospec.com/palette-list
 * You can use any palette upto 32 colors. But don't use #000000 (Black) in your color palette as it will terminate at that color.
 
-### 📂 To load `*.wox.gz` from file
+### 📂 "Load `*.wox.gz` from file
 * `./wox loadgz <file_path>`
 * *e.g;* `./wox loadgz /home/user/file.wox.gz`
 
-### 📂 To export mesh or voxels
+### 📂 Export as mesh or voxels
 * `./wox export <project_name> <option: wox,txt,vv,ply> <export_path>`
 * *e.g;* `./wox export txt /home/user/file.txt`
 * *e.g;* `./wox export ply /home/user/file.ply`
