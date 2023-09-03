@@ -716,8 +716,8 @@ void drawHud(const uint type)
         // center hud
         const int left = winw2-177;
         int top = winh2-152;
-        SDL_FillRect(sHud, &(SDL_Rect){winw2-193, top-3, 382, 304}, 0x33FFFFFF);
-        SDL_FillRect(sHud, &(SDL_Rect){winw2-190, top, 376, 298}, 0xCC000000);
+        SDL_FillRect(sHud, &(SDL_Rect){winw2-193, top-3, 382, 281}, 0x33FFFFFF);
+        SDL_FillRect(sHud, &(SDL_Rect){winw2-190, top, 376, 275}, 0xCC000000);
         int a = drawText(sHud, "Woxel", winw2-15, top+11, 3);
         a = drawText(sHud, appVersion, left+330, top+11, 4);
         a = drawText(sHud, "woxels.github.io", left, top+11, 4);
@@ -733,36 +733,6 @@ void drawHud(const uint type)
         drawText(sHud, "Move up and down relative Z.", a, top, 1);
 
         top += 11;
-        a = drawText(sHud, "Left Click ", left, top, 2);
-        a = drawText(sHud, "Place node.", a, top, 1);
-        a = drawText(sHud, " Right Click ", a, top, 2);
-        drawText(sHud, "Delete node.", a, top, 1);
-
-        top += 11;
-        a = drawText(sHud, "V ", left, top, 2);
-        drawText(sHud, "Place node at current location.", a, top, 1);
-
-        top += 11;
-        a = drawText(sHud, "R ", left, top, 2);
-        drawText(sHud, "Toggle mirror brush.", a, top, 1);
-
-        top += 22;
-        a = drawText(sHud, "Middle Scroll ", left, top, 2);
-        drawText(sHud, "Change selected color.", a, top, 1);
-
-        top += 11;
-        a = drawText(sHud, "Q ", left, top, 2);
-        a = drawText(sHud, "Clone color of pointed node.", a, top, 1);
-        a = drawText(sHud, " E ", a, top, 2);
-        drawText(sHud, "Replace color of pointed node.", a, top, 1);
-
-        top += 11;
-        a = drawText(sHud, "X", left, top, 2);
-        a = drawText(sHud, " + ", a, top, 4);
-        a = drawText(sHud, "C ", a, top, 2);
-        drawText(sHud, "Scroll color of pointed node.", a, top, 1);
-
-        top += 22;
         a = drawText(sHud, "F ", left, top, 2);
         drawText(sHud, "Toggle player fast speed on and off.", a, top, 1);
         
@@ -775,6 +745,34 @@ void drawHud(const uint type)
         top += 11;
         a = drawText(sHud, "P ", left, top, 2);
         drawText(sHud, "Toggle pitch lock.", a, top, 1);
+
+        top += 22;
+        a = drawText(sHud, "Left Click ", left, top, 2);
+        a = drawText(sHud, "Place node.", a, top, 1);
+        a = drawText(sHud, " Right Click ", a, top, 2);
+        drawText(sHud, "Delete node.", a, top, 1);
+
+        top += 11;
+        a = drawText(sHud, "Q ", left, top, 2);
+        a = drawText(sHud, "Clone color of pointed node.", a, top, 1);
+        a = drawText(sHud, " E ", a, top, 2);
+        drawText(sHud, "Replace color of pointed node.", a, top, 1);
+
+        top += 11;
+        a = drawText(sHud, "R ", left, top, 2);
+        a = drawText(sHud, "Toggle mirror brush.", a, top, 1);
+        a = drawText(sHud, " V ", a, top, 2);
+        drawText(sHud, "Place node at current location.", a, top, 1);
+
+        top += 11;
+        a = drawText(sHud, "Middle Scroll ", left, top, 2);
+        drawText(sHud, "Change selected color.", a, top, 1);
+
+        top += 11;
+        a = drawText(sHud, "X", left, top, 2);
+        a = drawText(sHud, " + ", a, top, 4);
+        a = drawText(sHud, "C ", a, top, 2);
+        drawText(sHud, "Scroll color of pointed node.", a, top, 1);
 
         top += 22;
         a = drawText(sHud, "F1 ", left, top, 2);
@@ -962,7 +960,7 @@ int main(int argc, char** argv)
     printf(">>> Woxel <<<\n");
     printf("----\n");
     printf("Mouse locks when you click on the game window, press ESCAPE/TAB to unlock the mouse.\n\n");
-    printf("- Input Mapping\n");
+    printf("Input Mapping:\n");
     printf("W,A,S,D = Move around based on relative orientation to X and Y.\n");
     printf("SPACE + L-SHIFT = Move up and down relative Z.\n");
     printf("Left Click / R-SHIFT = Place node.\n");
@@ -1259,6 +1257,7 @@ int main(int argc, char** argv)
                         }
                     }
                 }
+                // merge vertices by distance in Blender or `Cleaning and Repairing > Merge Close Vertices` in MeshLab
                 for(int i = 0, t = 0; i < faces; i++)
                 {
                     const int i1 = t++;
