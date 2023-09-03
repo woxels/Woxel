@@ -4,8 +4,6 @@
 
 ### Mouse locks when you click on the game window, press ESCAPE / TAB to unlock the mouse.
 
-**Note:** ply export option coming in version 1.1
-
 ## Input Mapping
 * **W,A,S,D** = Move around based on relative orientation to X and Y.
 * **SPACE** + **L-SHIFT** = Move up and down relative Z.
@@ -38,7 +36,7 @@ color on each new line, 32 colors maximum. e.g; "#00FFFF".
 #### To load from file: ./wox loadgz <file_path>
 e.g; `./wox loadgz /home/user/file.wox.gz`
 
-#### To export: ./wox export <project_name> <option: wox,txt> <export_path>
+#### To export: ./wox export <project_name> <option: wox,txt,vv,ply> <export_path>
 e.g; `./wox export txt /home/user/file.txt`
 
 ## Info
