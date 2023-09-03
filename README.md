@@ -41,7 +41,7 @@ Woxel uses intuitive controls identical to Minetest or Minecraft, while providin
 #### ✔️ *Your state is automatically saved on exit.*
 
 ## Console Arguments
-### 📂 To create or load a project, change project mouse sensitivity, or update a projects color palette
+### 📂🖱️🎨 To create or load a project, change project mouse sensitivity, or update a projects color palette
 * `./wox <project_name> <[OPTIONAL]mouse_sensitivity> <[OPTIONAL]path to color palette>`
 * *e.g;* `./wox Untitled 0.003 /tmp/colors.txt`
 * 1st, "Untitled", Name of project to open or create.
