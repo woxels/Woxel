@@ -6,26 +6,30 @@
 	<name>Woxel</name>
 	<summary>Open Source 3D voxel editor that's better than Goxel ;p</summary>
 	<description>
+		<p>This is like Minecraft/Minetest/Goxel.</p>
 		<p>Mouse locks when you click on the game window, press ESCAPE or TAB to unlock the mouse.</p>
 		<ul>
 			<li>W,A,S,D = Move around based on relative orientation to X and Y.</li>
 			<li>SPACE + L-SHIFT = Move up and down relative Z.</li>
-			<li>Left Click / R-SHIFT = Place node.</li>
-			<li>Right Click / R-CTRL = Delete node.</li>
-			<li>V = Places voxel at current position</li>
-			<li>R = Toggle mirror brush.</li>
-			<li>Q / Z / Middle Click / Mouse4 = Clone color of pointed node.</li>
-			<li>E / Mouse5 = Replace color of pointed node.</li>
 			<li>F = Toggle player fast speed on and off.</li>
 			<li>1-7 = Change move speed for selected fast state.</li>
-			<li>X + C / Slash + Quote = Change texture of pointed node.</li>
 			<li>P = Toggle pitch lock.</li>
-			<li>F1 = Resets environment state back to default.</li>
-			<li>F1 = Resets environment state back to default.</li>
-			<li>F3 = Save. (auto saves on exit or idle for more than 3 minutes)</li>
-			<li>F8 = Load. (will erase what you have done since the last save)</li>
 		</ul>
-		<p>Arrow Keys can be used to move the view around.</p>
+		<ul>
+			<li>Left Click / R-SHIFT = Place node.</li>
+			<li>Right Click / R-CTRL = Delete node.</li>
+			<li>Q / Z / Middle Click / Mouse4 = Clone color of pointed node.</li>
+			<li>E / Mouse5 = Replace color of pointed node.</li>
+			<li>R = Toggle mirror brush.</li>
+			<li>V = Places voxel at current position</li>
+			<li>X + C / Slash + Quote = Change texture of pointed node.</li>
+		</ul>
+		<ul>
+			<li>F1 = Resets environment state back to default.</li>
+			<li>F1 = Resets environment state back to default.</li>
+			<li>F3 = Save. <i>(auto saves on exit or idle for more than 3 minutes)</i></li>
+			<li>F8 = Load. <i>(will erase what you have done since the last save)</i></li>
+		</ul>
 		<p>Your state is automatically saved on exit.</p>
 		<p>Check the console output for more information, arguments can be passed to the program to export your project, create a new project, load a project from file, change mouse sensitivity and apply custom color palettes to projects.</p>
 	</description>
