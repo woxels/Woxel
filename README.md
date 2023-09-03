@@ -43,7 +43,7 @@
 * 3rd, "/tmp/colors.txt", path to a color palette file, the file must contain a hex
 color on each new line, 32 colors maximum. e.g; "#00FFFF".
 
-### To load from file
+### To `*.wox.gz` load from file
 * `./wox loadgz <file_path>`
 * e.g; `./wox loadgz /home/user/file.wox.gz`
 
