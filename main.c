@@ -990,7 +990,7 @@ int main(int argc, char** argv)
     printf("color on each new line, 32 colors maximum. e.g; \"#00FFFF\".\n\n");
     printf("To load from file: ./wox loadgz <file_path>\n");
     printf("e.g; ./wox loadgz /home/user/file.wox.gz\n\n");
-    printf("To export: ./wox export <project_name> <option: wox,txt> <export_path>\n");
+    printf("To export: ./wox export <project_name> <option: wox,txt,vv> <export_path>\n");
     printf("e.g; ./wox export txt /home/user/file.txt\n\n");
     printf("Find more color palettes at; https://lospec.com/palette-list\n");
     printf("You can use any palette upto 32 colors. But don't use #000000 (Black)\nin your color palette as it will terminate at that color.\n\n");
@@ -1022,8 +1022,8 @@ int main(int argc, char** argv)
         sprintf(openTitle, "%s", argv[2]);
 
         if     (strcmp(argv[3], "txt") == 0){export_type=1;}
-        // else if(strcmp(argv[3], "ogl") == 0){export_type=2;}
-        // else if(strcmp(argv[3], "ply") == 0){export_type=3;}
+        else if(strcmp(argv[3], "vv") == 0){export_type=2;}
+        else if(strcmp(argv[3], "ply") == 0){export_type=3;}
 
         sprintf(export_path, "%s", argv[4]);
     }
@@ -1148,8 +1148,133 @@ int main(int argc, char** argv)
                 printf("[%s] Exported TXT: %s\n", tmp, export_path);
             }
         }
+        if(export_type == 2)
+        {
+            FILE* f = fopen(export_path, "w");
+            if(f != NULL)
+            {
+                fprintf(f, "# %s %s - Visible Voxels only\n", appTitle, appVersion);
+                fprintf(f, "# X Y Z RRGGBB\n");
+                for(uchar z = 0; z < 128; z++)
+                {
+                    for(uchar y = 0; y < 128; y++)
+                    {
+                        for(uchar x = 0; x < 128; x++)
+                        {
+                            const uint i = PTI(x,y,z);
+                            if(g.voxels[i] < 8){continue;}
+                            const uint tu = g.colors[g.voxels[i]-1];
+                            uchar r = (tu & 0x00FF0000) >> 16;
+                            uchar gc = (tu & 0x0000FF00) >> 8;
+                            uchar b = (tu & 0x000000FF);
+                            if(r != 0 && gc != 0 && b != 0)
+                            {
+                                if( x <=   0 || y <=   0 || z <=   0 ||
+                                    x >= 127 || y >= 127 || z >= 127 ||
+                                    g.voxels[PTIB(x-1, y, z)] == 0 ||
+                                    g.voxels[PTIB(x+1, y, z)] == 0 ||
+                                    g.voxels[PTIB(x, y-1, z)] == 0 ||
+                                    g.voxels[PTIB(x, y+1, z)] == 0 ||
+                                    g.voxels[PTIB(x, y, z-1)] == 0 ||
+                                    g.voxels[PTIB(x, y, z+1)] == 0 )
+                                {
+                                    fprintf(f, "%i %i %i %02X%02X%02X\n", ((int)x)-64, ((int)y)-64, z, r, gc, b);
+                                }
+                            }
+                        }
+                    }
+                }
+                fclose(f);
+                char tmp[16];
+                timestamp(tmp);
+                printf("[%s] Exported VV: %s\n", tmp, export_path);
+            }
+        }
+        if(export_type == 3)
+        {
+            FILE* f = fopen(export_path, "w");
+            if(f != NULL)
+            {
+                // I should be doing this in the single loop writing to memory so
+                // that I can append the header later for writing to file.
+                uint vc = 0;
+                for(uchar z = 0; z < 128; z++){
+                    for(uchar y = 0; y < 128; y++){
+                        for(uchar x = 0; x < 128; x++){
+                            const uint i = PTI(x,y,z);
+                            if(g.voxels[i] < 8){continue;}
+                            const uint tu = g.colors[g.voxels[i]-1];
+                            uchar r = (tu & 0x00FF0000) >> 16;
+                            uchar gc = (tu & 0x0000FF00) >> 8;
+                            uchar b = (tu & 0x000000FF);
+                            if(r != 0 && gc != 0 && b != 0)
+                            {
+                                if(g.voxels[PTIB(x-1, y, z)] == 0){vc+=6;}
+                                if(g.voxels[PTIB(x+1, y, z)] == 0){vc+=6;}
+                                if(g.voxels[PTIB(x, y-1, z)] == 0){vc+=6;}
+                                if(g.voxels[PTIB(x, y+1, z)] == 0){vc+=6;}
+                                if(g.voxels[PTIB(x, y, z-1)] == 0){vc+=6;}
+                                if(g.voxels[PTIB(x, y, z+1)] == 0){vc+=6;}
+                }}}}
+                // but it's unlikely to ever be that expensive that anyone would notice this inefficiency
+                fprintf(f, "ply\n");
+                fprintf(f, "format ascii 1.0\n");
+                fprintf(f, "comment Created by Woxel v1.0 - woxels.github.io\n");
+                fprintf(f, "element vertex %u\n", vc);
+                fprintf(f, "property float x\n");
+                fprintf(f, "property float y\n");
+                fprintf(f, "property float z\n");
+                fprintf(f, "property float nx\n");
+                fprintf(f, "property float ny\n");
+                fprintf(f, "property float nz\n");
+                fprintf(f, "property uchar red\n");
+                fprintf(f, "property uchar green\n");
+                fprintf(f, "property uchar blue\n");
+                fprintf(f, "element face %u\n", vc/3);
+                fprintf(f, "property list uchar uint vertex_indices\n");
+                fprintf(f, "end_header\n");
+                for(uchar z = 0; z < 128; z++)
+                {
+                    for(uchar y = 0; y < 128; y++)
+                    {
+                        for(uchar x = 0; x < 128; x++)
+                        {
+                            const uint i = PTI(x,y,z);
+                            if(g.voxels[i] < 8){continue;}
+                            const uint tu = g.colors[g.voxels[i]-1];
+                            uchar r = (tu & 0x00FF0000) >> 16;
+                            uchar gc = (tu & 0x0000FF00) >> 8;
+                            uchar b = (tu & 0x000000FF);
+                            if(r != 0 && gc != 0 && b != 0)
+                            {
+                                if(g.voxels[PTIB(x-1, y, z)] == 0){fw_mx(f, x, y, z, r, gc, b);}
+                                if(g.voxels[PTIB(x+1, y, z)] == 0){fw_px(f, x, y, z, r, gc, b);}
+                                if(g.voxels[PTIB(x, y-1, z)] == 0){fw_my(f, x, y, z, r, gc, b);}
+                                if(g.voxels[PTIB(x, y+1, z)] == 0){fw_py(f, x, y, z, r, gc, b);}
+                                if(g.voxels[PTIB(x, y, z-1)] == 0){fw_mz(f, x, y, z, r, gc, b);}
+                                if(g.voxels[PTIB(x, y, z+1)] == 0){fw_pz(f, x, y, z, r, gc, b);}
+                            }
+                        }
+                    }
+                }
+                for(int i = 0, t = 0; i < 994; i++)
+                {
+                    const int i1 = t++;
+                    const int i2 = t++;
+                    const int i3 = t++;
+                    fprintf(f, "3 %i %i %i\n", i1, i2, i3);
+
+                }
+                fclose(f);
+                char tmp[16];
+                timestamp(tmp);
+                printf("[%s] Exported PLY: %s\n", tmp, export_path);
+            }
+        }
         return 0;
     }
+    
+    
 
     // custom mouse sensitivity
     if(argc >= 3)
