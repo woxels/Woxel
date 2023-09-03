@@ -1230,7 +1230,8 @@ int main(int argc, char** argv)
                 fprintf(f, "property uchar red\n");
                 fprintf(f, "property uchar green\n");
                 fprintf(f, "property uchar blue\n");
-                fprintf(f, "element face %u\n", vc/3);
+                const uint faces = vc/3;
+                fprintf(f, "element face %u\n", faces);
                 fprintf(f, "property list uchar uint vertex_indices\n");
                 fprintf(f, "end_header\n");
                 for(uchar z = 0; z < 128; z++)
@@ -1257,13 +1258,12 @@ int main(int argc, char** argv)
                         }
                     }
                 }
-                for(int i = 0, t = 0; i < 994; i++)
+                for(int i = 0, t = 0; i < faces; i++)
                 {
                     const int i1 = t++;
                     const int i2 = t++;
                     const int i3 = t++;
                     fprintf(f, "3 %i %i %i\n", i1, i2, i3);
-
                 }
                 fclose(f);
                 char tmp[16];
