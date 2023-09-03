@@ -990,7 +990,7 @@ int main(int argc, char** argv)
     printf("color on each new line, 32 colors maximum. e.g; \"#00FFFF\".\n\n");
     printf("To load from file: ./wox loadgz <file_path>\n");
     printf("e.g; ./wox loadgz /home/user/file.wox.gz\n\n");
-    printf("To export: ./wox export <project_name> <option: wox,txt,vv> <export_path>\n");
+    printf("To export: ./wox export <project_name> <option: wox,txt,vv,ply> <export_path>\n");
     printf("e.g; ./wox export txt /home/user/file.txt\n\n");
     printf("Find more color palettes at; https://lospec.com/palette-list\n");
     printf("You can use any palette upto 32 colors. But don't use #000000 (Black)\nin your color palette as it will terminate at that color.\n\n");
@@ -1219,7 +1219,7 @@ int main(int argc, char** argv)
                 // but it's unlikely to ever be that expensive that anyone would notice this inefficiency
                 fprintf(f, "ply\n");
                 fprintf(f, "format ascii 1.0\n");
-                fprintf(f, "comment Created by Woxel v1.0 - woxels.github.io\n");
+                fprintf(f, "comment Created by %s %s - woxels.github.io\n", appTitle, appVersion);
                 fprintf(f, "element vertex %u\n", vc);
                 fprintf(f, "property float x\n");
                 fprintf(f, "property float y\n");
