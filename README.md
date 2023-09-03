@@ -47,7 +47,7 @@ color on each new line, 32 colors maximum. e.g; "#00FFFF".
 * `./wox loadgz <file_path>`
 * e.g; `./wox loadgz /home/user/file.wox.gz`
 
-### To export
+### To export mesh or voxels
 * `./wox export <project_name> <option: wox,txt,vv,ply> <export_path>`
 * e.g; `./wox export txt /home/user/file.txt`
 * e.g; `./wox export ply /home/user/file.ply`
