@@ -23,7 +23,7 @@
 * **Middle Scroll** = Change selected color.
 * **X** + **C** / **Slash** + **Quote** = Scroll color of pointed node.
 
-### System
+### Settings
 * **F1** = Resets environment state back to default.
 * **F2** = Toggle HUD visibility.
 * **F3** = Save. (auto saves on exit, backup made if idle for 3 mins.)
