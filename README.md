@@ -2,7 +2,7 @@
 
 ![screenshot](https://raw.githubusercontent.com/woxels/woxels.github.io/main/Screenshot_2023-09-02_07-06-18.png)
 
-It uses intuitive controls identical to Minetest or Minecraft, while providing an experience similar to Goxel or Magicalvoxel.
+Woxel uses intuitive controls identical to Minetest or Minecraft, while providing an experience similar to Goxel or Magicalvoxel.
 
 ## Input Mapping
 
