@@ -6,14 +6,14 @@ Woxel uses intuitive controls identical to Minetest or Minecraft, while providin
 
 ## Input Mapping
 
-### Movement
+### 🏃 Movement
 * **W,A,S,D** = Move around based on relative orientation to X and Y.
 * **SPACE** + **L-SHIFT** = Move up and down relative Z.
 * **F** = Toggle player fast speed on and off.
 * **1-7** = Change move speed for selected fast state.
 * **P** = Toggle pitch lock.
 
-### Interaction
+### 🏗️ Interaction
 * **Left Click** / **R-SHIFT** = Place node.
 * **Right Click** / **R-CTRL** = Delete node.
 * **Q** / **Z** / **Middle Click** / **Mouse4** = Clone color of pointed node.
@@ -23,7 +23,7 @@ Woxel uses intuitive controls identical to Minetest or Minecraft, while providin
 * **Middle Scroll** = Change selected color.
 * **X** + **C** / **Slash** + **Quote** = Scroll color of pointed node.
 
-### Settings
+### 🛠️ Settings
 * **F1** = Resets environment state back to default.
 * **F2** = Toggle HUD visibility.
 * **F3** = Save. (auto saves on exit, backup made if idle for 3 mins.)
