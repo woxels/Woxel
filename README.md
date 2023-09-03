@@ -5,12 +5,15 @@
 ### Mouse locks when you click on the game window, press ESCAPE / TAB to unlock the mouse.
 
 ## Input Mapping
+
+### Movement
 * **W,A,S,D** = Move around based on relative orientation to X and Y.
 * **SPACE** + **L-SHIFT** = Move up and down relative Z.
 * **F** = Toggle player fast speed on and off.
 * **1-7** = Change move speed for selected fast state.
 * **P** = Toggle pitch lock.
 
+### Interaction
 * **Left Click** / **R-SHIFT** = Place node.
 * **Right Click** / **R-CTRL** = Delete node.
 * **Q** / **Z** / **Middle Click** / **Mouse4** = Clone color of pointed node.
@@ -20,11 +23,12 @@
 * **Middle Scroll** = Change selected color.
 * **X** + **C** / **Slash** + **Quote** = Scroll color of pointed node.
 
-
+### System
 * **F1** = Resets environment state back to default.
 * **F2** = Toggle HUD visibility.
 * **F3** = Save. (auto saves on exit, backup made if idle for 3 mins.)
 * **F8** = Load. (will erase what you have done since the last save)
+* **ESCAPE / TAB** = Toggle menu.
   
 *Arrow Keys can be used to move the view around.*
 
