@@ -1274,8 +1274,6 @@ int main(int argc, char** argv)
         }
         return 0;
     }
-    
-    
 
     // custom mouse sensitivity
     if(argc >= 3)
