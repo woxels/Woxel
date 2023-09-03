@@ -35,8 +35,9 @@
 *Your state is automatically saved on exit.*
 
 ## Console Arguments
-### To create a new project, change project mouse sensitivity, or update a projects color palette
-e.g; `./wox Untitled 0.003 /tmp/colors.txt`
+### To create or load a project, change project mouse sensitivity, or update a projects color palette
+* `./wox <project_name> <[OPTIONAL]mouse_sensitivity> <[OPTIONAL]path to color palette>`
+* e.g; `./wox Untitled 0.003 /tmp/colors.txt`
 * 1st, "Untitled", Name of project to open or create.
 * 2nd, "0.003", Mouse sensitivity.
 * 3rd, "/tmp/colors.txt", path to a color palette file, the file must contain a hex
