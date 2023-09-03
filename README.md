@@ -50,6 +50,7 @@ color on each new line, 32 colors maximum. e.g; "#00FFFF".
 ### To export
 * `./wox export <project_name> <option: wox,txt,vv,ply> <export_path>`
 * e.g; `./wox export txt /home/user/file.txt`
+* e.g; `./wox export ply /home/user/file.ply`
 
 *When exporting as `ply` you will want to merge vertices by distance in [Blender](https://www.blender.org/)
 or `Cleaning and Repairing > Merge Close Vertices` in [MeshLab](https://www.meshlab.net/).*
