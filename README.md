@@ -32,7 +32,7 @@ Woxel uses intuitive controls identical to Minetest or Minecraft, while providin
 
 ### Mouse locks when you click on the game window, press ESCAPE / TAB to unlock the mouse.
   
-#### 😲 *Arrow Keys can be used to move the view around.*
+#### 🤯 *Arrow Keys can be used to move the view around.*
 
 #### ✔️ *Your state is automatically saved on exit.*
 
