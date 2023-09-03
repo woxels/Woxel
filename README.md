@@ -56,5 +56,12 @@
 *When exporting as `ply` you will want to merge vertices by distance in [Blender](https://www.blender.org/)
 or `Cleaning and Repairing > Merge Close Vertices` in [MeshLab](https://www.meshlab.net/).*
 
+## Compile
+Run `make` or `make test` or `cc main.c -Ofast -lm -lz -lSDL2 -lGLESv2 -lEGL -o wox`
+```
+cc main.c -Ofast -lm -lz -lSDL2 -lGLESv2 -lEGL -o wox
+./wox
+```
+
 ## Info
 * Default 32 Color Palette: https://lospec.com/palette-list/resurrect-32
