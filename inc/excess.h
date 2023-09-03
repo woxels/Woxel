@@ -252,10 +252,12 @@ void loadColors(const char* file)
                 g.colors[7+lino] = val;
                 lino++;
                 if(lino > 31){break;}
-                // uchar r = (val & 0xFF0000) >> 16;
-                // uchar gc = (val & 0x00FF00) >> 8;
-                // uchar b = (val & 0x0000FF);
-                // printf("%u: %u %u %u\n", val, r,gc,b);
+            }
+            else if(sscanf(line, "%x", &val) == 1)
+            {
+                g.colors[7+lino] = val;
+                lino++;
+                if(lino > 31){break;}
             }
         }
         fclose(f);
