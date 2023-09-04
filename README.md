@@ -8,6 +8,7 @@ Woxel uses intuitive controls identical to Minetest or Minecraft, while providin
 
 ## Download
 * 🔗 **Flatpak:**
+* 🔗 **Snapcraft:** https://snapcraft.io/woxel
 * 🔗 **Ubuntu:** https://github.com/woxels/Woxel/releases/download/1.0/wox
 
 ## Input Mapping
