@@ -4,7 +4,7 @@ version: '1.0'
 license: GPL-2.0-only
 summary: Open Source 3D voxel editor that's better than Goxel ;p
 description: |
-  This is like Minecraft/Minetest/Goxel.
+  Woxel uses intuitive controls identical to Minetest or Minecraft, while providing a design experience similar to Goxel or Magicalvoxel.
 
   Mouse locks when you click on the game window, press ESCAPE or TAB to unlock the mouse.
 
