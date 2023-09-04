@@ -26,7 +26,7 @@
 		</ul>
 		<ul>
 			<li>F1 = Resets environment state back to default.</li>
-			<li>F1 = Resets environment state back to default.</li>
+			<li>F2 = Toggle HUD visibility.</li>
 			<li>F3 = Save. <i>(auto saves on exit or idle for more than 3 minutes)</i></li>
 			<li>F8 = Load. <i>(will erase what you have done since the last save)</i></li>
 		</ul>
