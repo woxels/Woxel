@@ -727,7 +727,7 @@ void drawHud(const uint type)
         SDL_FillRect(sHud, &(SDL_Rect){winw2-190, top, 376, 275}, 0xCC000000);
         int a = drawText(sHud, "Woxel", winw2-15, top+11, 3);
         a = drawText(sHud, appVersion, left+330, top+11, 4);
-        a = drawText(sHud, "woxel.xyz", left, top+11, 4);
+        a = drawText(sHud, "woxels.github.io", left, top+11, 4);
 
         top += 33;
         a = drawText(sHud, "WASD ", left, top, 2);
