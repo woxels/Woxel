@@ -7,7 +7,7 @@ Woxel uses intuitive controls identical to Minetest or Minecraft, while providin
 💬 Join our discord! https://discord.gg/AH23bGNE2h
 
 ## Download
-* 🔗 **Flatpak:**
+* 🔗 **Flatpak:** https://flathub.org/apps/xyz.woxel.Woxel
 * 🔗 **Snapcraft:** https://snapcraft.io/woxel
 * 🔗 **Ubuntu:** https://github.com/woxels/Woxel/releases/download/1.0/wox
 
