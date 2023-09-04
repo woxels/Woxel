@@ -727,7 +727,7 @@ void drawHud(const uint type)
         SDL_FillRect(sHud, &(SDL_Rect){winw2-190, top, 376, 275}, 0xCC000000);
         int a = drawText(sHud, "Woxel", winw2-15, top+11, 3);
         a = drawText(sHud, appVersion, left+330, top+11, 4);
-        a = drawText(sHud, "woxels.github.io", left, top+11, 4);
+        a = drawText(sHud, "woxel.xyz", left, top+11, 4);
 
         top += 33;
         a = drawText(sHud, "WASD ", left, top, 2);
@@ -964,9 +964,13 @@ int main(int argc, char** argv)
 //*************************************
 // init stuff
 //*************************************
-    printf(">>> Woxel <<<\n");
-    printf("----\n");
-    printf("Mouse locks when you click on the game window, press ESCAPE/TAB to unlock the mouse.\n\n");
+    printf("██╗    ██╗ ██████╗ ██╗  ██╗███████╗██╗     \n");
+    printf("██║    ██║██╔═══██╗╚██╗██╔╝██╔════╝██║     \n");
+    printf("██║ █╗ ██║██║   ██║ ╚███╔╝ █████╗  ██║     \n");
+    printf("██║███╗██║██║   ██║ ██╔██╗ ██╔══╝  ██║     \n");
+    printf("╚███╔███╔╝╚██████╔╝██╔╝ ██╗███████╗███████╗\n");
+    printf(" ╚══╝╚══╝  ╚═════╝ ╚═╝  ╚═╝╚══════╝╚══════╝\n");
+    printf("\nMouse locks when you click on the game window, press ESCAPE/TAB to unlock the mouse.\n\n");
     printf("Input Mapping:\n");
     printf("W,A,S,D = Move around based on relative orientation to X and Y.\n");
     printf("SPACE + L-SHIFT = Move up and down relative Z.\n");
