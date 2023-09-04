@@ -1,0 +1,10 @@
+[Desktop Entry]
+Encoding=UTF-8
+Name=Woxel
+Comment=Woxel design software
+StartupNotify=false
+Exec=woxel
+Icon=${SNAP}/meta/gui/woxel.png
+Terminal=false
+Type=Application
+Categories=Utility;Graphics;
