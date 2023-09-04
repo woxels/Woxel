@@ -1,0 +1,69 @@
+name: woxel
+base: core22
+version: '1.0'
+license: GPL-2.0-only
+summary: Open Source 3D voxel editor that's better than Goxel ;p
+description: |
+  This is like Minecraft/Minetest/Goxel.
+
+  Mouse locks when you click on the game window, press ESCAPE or TAB to unlock the mouse.
+
+  * W,A,S,D = Move around based on relative orientation to X and Y.
+  * SPACE + L-SHIFT = Move up and down relative Z.
+  * F = Toggle player fast speed on and off.
+  * 1-7 = Change move speed for selected fast state.
+  * P = Toggle pitch lock.
+
+  * Left Click / R-SHIFT = Place node.
+  * Right Click / R-CTRL = Delete node.
+  * Q / Z / Middle Click / Mouse4 = Clone color of pointed node.
+  * E / Mouse5 = Replace color of pointed node.
+  * R = Toggle mirror brush.
+  * V = Places voxel at current position
+  * X + C / Slash + Quote = Change texture of pointed node.
+
+  * F1 = Resets environment state back to default.
+  * F2 = Toggle HUD visibility.
+  * F3 = Save. *(auto saves on exit or idle for more than 3 minutes)*
+  * F8 = Load. *(will erase what you have done since the last save)*
+
+  Your state is automatically saved on exit.
+
+  Check the console output for more information, arguments can be passed to the program to export your project, create a new project, load a project from file, change mouse sensitivity and apply custom color palettes to projects.
+
+grade: stable
+confinement: strict
+
+architectures:
+  - build-on: [amd64]
+    build-for: [amd64]
+  - build-on: [arm64]
+    build-on: [arm64]
+  - build-on: [armhf]
+    build-on: [armhf]
+
+apps:
+  woxel:
+    extensions: [gnome]
+    command: woxel
+    plugs:
+    - desktop
+    - desktop-legacy
+    - gsettings
+    - opengl
+    - wayland
+    - x11
+    - home
+    environment:
+      HOME: /home/$USER
+
+parts:
+  woxel:
+    source: https://github.com/woxels/Woxel
+    source-type: git
+    plugin: make
+    source-subdir: snap
+    build-packages:
+    - libsdl2-dev
+    stage-packages:
+    - libsdl2-2.0-0
