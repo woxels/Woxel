@@ -6,8 +6,9 @@
 	<name>Woxel</name>
 	<summary>Open Source 3D voxel editor that's better than Goxel ;p</summary>
 	<description>
-		<p>Woxel uses intuitive controls identical to Minetest or Minecraft, while providing a design experience similar to Goxel or Magicalvoxel..</p>
+		<p>Woxel uses intuitive controls identical to Minetest and Minecraft, while providing a design experience similar to Goxel and Magicalvoxel.</p>
 		<p>Mouse locks when you click on the game window, press ESCAPE or TAB to unlock the mouse.</p>
+		<p><strong>Movement</strong></p>
 		<ul>
 			<li>W,A,S,D = Move around based on relative orientation to X and Y.</li>
 			<li>SPACE + L-SHIFT = Move up and down relative Z.</li>
@@ -15,6 +16,7 @@
 			<li>1-7 = Change move speed for selected fast state.</li>
 			<li>P = Toggle pitch lock.</li>
 		</ul>
+		<p><strong>Interaction</strong></p>
 		<ul>
 			<li>Left Click / R-SHIFT = Place node.</li>
 			<li>Right Click / R-CTRL = Delete node.</li>
@@ -24,6 +26,7 @@
 			<li>V = Places voxel at current position</li>
 			<li>X + C / Slash + Quote = Change texture of pointed node.</li>
 		</ul>
+		<p><strong>Settings</strong></p>
 		<ul>
 			<li>F1 = Resets environment state back to default.</li>
 			<li>F2 = Toggle HUD visibility.</li>
