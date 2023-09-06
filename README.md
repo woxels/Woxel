@@ -1,7 +1,5 @@
 # Woxel
 
-## It's completely broken on Wayland at the moment, no window border and no mouse locking. Working on a web version as suppliment.
-
 ![screenshot](https://raw.githubusercontent.com/woxels/woxels.github.io/main/Screenshot_2023-09-02_07-06-18.png)
 
 Woxel uses intuitive controls identical to Minetest or Minecraft, while providing a design experience similar to Goxel or Magicalvoxel.
@@ -12,6 +10,7 @@ Woxel uses intuitive controls identical to Minetest or Minecraft, while providin
 * 🔗 **Flatpak:** https://flathub.org/apps/xyz.woxel.Woxel
 * 🔗 **Snapcraft:** https://snapcraft.io/woxel
 * 🔗 **Ubuntu:** https://github.com/woxels/Woxel/releases/download/1.0/wox
+*(it's broken on wayland)*
 
 ## Input Mapping
 
