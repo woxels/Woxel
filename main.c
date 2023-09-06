@@ -336,7 +336,6 @@ void main_loop()
                 if(event.button.button == SDL_BUTTON_LEFT){ptt = 0.f;}
                 else if(event.button.button == SDL_BUTTON_RIGHT){dtt = 0.f;}
                 else if(event.button.button == SDL_BUTTON_X2){rtt = 0.f;}
-                md = 0;
                 idle = t;
             }
             break;
@@ -1039,7 +1038,6 @@ int main(int argc, char** argv)
     }
 
     // default state
-    uint pls=0;
     if(loadState(openTitle, load_state) == 0)
     {
         defaultState(0);
