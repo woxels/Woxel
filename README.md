@@ -1,10 +1,10 @@
 # Woxel
 
+## It's completely broken on Wayland at the moment, no window border and no mouse locking. Working on a web version as suppliment.
+
 ![screenshot](https://raw.githubusercontent.com/woxels/woxels.github.io/main/Screenshot_2023-09-02_07-06-18.png)
 
 Woxel uses intuitive controls identical to Minetest or Minecraft, while providing a design experience similar to Goxel or Magicalvoxel.
-
-It's completely broken oh Wayland at the moment, no window border and no mouse locking. Working on a web version as suppliment.
 
 💬 Join our discord! https://discord.gg/AH23bGNE2h
 
