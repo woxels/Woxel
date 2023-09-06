@@ -39,7 +39,7 @@ Woxel uses intuitive controls identical to Minetest or Minecraft, while providin
 * **F8** = Load. (will erase what you have done since the last save)
 * **ESCAPE / TAB** = Toggle menu.
 
-### 🖱️ Mouse locks when you click on the game window, press ESCAPE / TAB to unlock the mouse.
+### 🖱️ Mouse locks when you click on the window, press ESCAPE / TAB to unlock the mouse.
   
 #### 😲 *Arrow Keys can be used to move the view around.* 🤯
 
