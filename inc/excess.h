@@ -48,7 +48,7 @@ char *basedir, *appdir;
 SDL_Window* wnd;
 SDL_GLContext glc;
 SDL_Surface* s_icon = NULL;
-int mx=0, my=0, lx=0, ly=0, md=0;
+int mx=0, my=0, lx=0, ly=0;
 int winw = 1024, winh = 768;
 int winw2 = 512, winh2 = 384;
 float ww, wh;
