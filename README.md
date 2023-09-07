@@ -1,4 +1,4 @@
-# Woxel
+![woxel header](https://raw.githubusercontent.com/woxels/woxels.github.io/main/woxelbanner.png)
 
 ![screenshot](https://raw.githubusercontent.com/woxels/woxels.github.io/main/Screenshot_2023-09-02_07-06-18.png)
 
