@@ -328,7 +328,7 @@ uint loadState(const char* name, const uint fs)
 }
 
 // voxel face rendering for ply
-uint fw_mx(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
+void fw_mx(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
 {
     x -= 64.f, y -= 64.f;
     const float s = 0.5f;
@@ -338,9 +338,8 @@ uint fw_mx(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
     fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y-s, z+s, r, g, b);
     fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y+s, z+s, r, g, b);
     fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y+s, z-s, r, g, b);
-    return 4;
 }
-uint fw_px(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
+void fw_px(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
 {
     x -= 64.f, y -= 64.f;
     const float s = 0.5f;
@@ -350,10 +349,9 @@ uint fw_px(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
     fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y+s, z+s, r, g, b);
     fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y-s, z+s, r, g, b);
     fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y-s, z-s, r, g, b);
-    return 4;
 }
 //
-uint fw_my(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
+void fw_my(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
 {
     x -= 64.f, y -= 64.f;
     const float s = 0.5f;
@@ -363,9 +361,8 @@ uint fw_my(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
     fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y-s, z+s, r, g, b);
     fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y-s, z+s, r, g, b);
     fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y-s, z-s, r, g, b);
-    return 4;
 }
-uint fw_py(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
+void fw_py(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
 {
     x -= 64.f, y -= 64.f;
     const float s = 0.5f;
@@ -375,10 +372,9 @@ uint fw_py(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
     fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y+s, z+s, r, g, b);
     fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y+s, z+s, r, g, b);
     fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y+s, z-s, r, g, b);
-    return 4;
 }
 //
-uint fw_mz(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
+void fw_mz(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
 {
     x -= 64.f, y -= 64.f;
     const float s = 0.5f;
@@ -388,9 +384,8 @@ uint fw_mz(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
     fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y+s, z-s, r, g, b);
     fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y-s, z-s, r, g, b);
     fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y-s, z-s, r, g, b);
-    return 4;
 }
-uint fw_pz(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
+void fw_pz(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
 {
     x -= 64.f, y -= 64.f;
     const float s = 0.5f;
@@ -400,7 +395,6 @@ uint fw_pz(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
     fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y+s, z+s, r, g, b);
     fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y-s, z+s, r, g, b);
     fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y-s, z+s, r, g, b);
-    return 4;
 }
 
 //*************************************
