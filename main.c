@@ -150,11 +150,14 @@ void main_loop()
                     traceViewPath(1);
                     if(lray > -1)
                     {
-                        if(g.pb.w == 1){g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = g.st;}
-                        if(mirror == 1)
+                        if(g.pb.w == 1 && isInBounds(g.pb) && g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] == 0)
                         {
-                            const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
-                            g.voxels[PTI(x, g.pb.y, g.pb.z)] = g.st;
+                            g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = g.st;
+                            if(mirror == 1)
+                            {
+                                const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
+                                g.voxels[PTI(x, g.pb.y, g.pb.z)] = g.st;
+                            }
                         }
                     }
                 }
@@ -362,13 +365,14 @@ void main_loop()
                     if(lray > -1)
                     {
                         if(g.pb.w == 1 && isInBounds(g.pb) && g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] == 0)
-                            g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = g.st;
-                    
-                        if(mirror == 1)
                         {
-                            const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
-                            g.voxels[PTI(x, g.pb.y, g.pb.z)] = g.st;
-                            //printf("%f %f %f\n", x, g.pb.y, g.pb.z);
+                            g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = g.st;
+                            if(mirror == 1)
+                            {
+                                const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
+                                g.voxels[PTI(x, g.pb.y, g.pb.z)] = g.st;
+                                //printf("%f %f %f\n", x, g.pb.y, g.pb.z);
+                            }
                         }
                     }
                 }
@@ -460,11 +464,14 @@ void main_loop()
             traceViewPath(1);
             if(lray > -1)
             {
-                if(g.pb.w == 1){g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = g.st;}
-                if(mirror == 1)
+                if(g.pb.w == 1 && isInBounds(g.pb) && g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] == 0)
                 {
-                    const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
-                    g.voxels[PTI(x, g.pb.y, g.pb.z)] = g.st;
+                    g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = g.st;
+                    if(mirror == 1)
+                    {
+                        const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
+                        g.voxels[PTI(x, g.pb.y, g.pb.z)] = g.st;
+                    }
                 }
             }
             ptt = t+0.1;
