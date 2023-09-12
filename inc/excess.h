@@ -343,58 +343,58 @@ void fw_px(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
 {
     x -= 64.f, y -= 64.f;
     const float s = 0.5f;
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y+s, z+s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y-s, z-s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y+s, z-s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y+s, z+s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y-s, z+s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y-s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 1 0 0 %u %u %u\n", x+s, y+s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 1 0 0 %u %u %u\n", x+s, y-s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 1 0 0 %u %u %u\n", x+s, y+s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 1 0 0 %u %u %u\n", x+s, y+s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 1 0 0 %u %u %u\n", x+s, y-s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 1 0 0 %u %u %u\n", x+s, y-s, z-s, r, g, b);
 }
 //
 void fw_my(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
 {
     x -= 64.f, y -= 64.f;
     const float s = 0.5f;
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y-s, z+s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y-s, z-s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y-s, z-s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y-s, z+s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y-s, z+s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y-s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 0 -1 0 %u %u %u\n", x+s, y-s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 -1 0 %u %u %u\n", x-s, y-s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 0 -1 0 %u %u %u\n", x+s, y-s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 0 -1 0 %u %u %u\n", x+s, y-s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 -1 0 %u %u %u\n", x-s, y-s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 -1 0 %u %u %u\n", x-s, y-s, z-s, r, g, b);
 }
 void fw_py(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
 {
     x -= 64.f, y -= 64.f;
     const float s = 0.5f;
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y+s, z+s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y+s, z-s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y+s, z-s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y+s, z+s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y+s, z+s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y+s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 0 1 0 %u %u %u\n", x-s, y+s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 1 0 %u %u %u\n", x+s, y+s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 0 1 0 %u %u %u\n", x-s, y+s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 0 1 0 %u %u %u\n", x-s, y+s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 1 0 %u %u %u\n", x+s, y+s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 1 0 %u %u %u\n", x+s, y+s, z-s, r, g, b);
 }
 //
 void fw_mz(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
 {
     x -= 64.f, y -= 64.f;
     const float s = 0.5f;
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y+s, z-s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y-s, z-s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y+s, z-s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y+s, z-s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y-s, z-s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y-s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 0 0 -1 %u %u %u\n", x+s, y+s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 0 0 -1 %u %u %u\n", x-s, y-s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 0 0 -1 %u %u %u\n", x-s, y+s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 0 0 -1 %u %u %u\n", x+s, y+s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 0 0 -1 %u %u %u\n", x+s, y-s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 0 0 -1 %u %u %u\n", x-s, y-s, z-s, r, g, b);
 }
 void fw_pz(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
 {
     x -= 64.f, y -= 64.f;
     const float s = 0.5f;
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y+s, z+s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y-s, z+s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y+s, z+s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y+s, z+s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y-s, z+s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x+s, y-s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 0 1 %u %u %u\n", x-s, y+s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 0 1 %u %u %u\n", x+s, y-s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 0 1 %u %u %u\n", x+s, y+s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 0 1 %u %u %u\n", x-s, y+s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 0 1 %u %u %u\n", x-s, y-s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 0 1 %u %u %u\n", x+s, y-s, z+s, r, g, b);
 }
 
 //*************************************
