@@ -148,7 +148,6 @@ const GLchar* v1 =
     "attribute vec4 position;\n"
     "varying vec3 color;\n"
     "varying vec3 vp;\n"
-    "varying float vpl;\n"
     "void main()\n"
     "{\n"
         "vec3 nc;\n" // https://stackoverflow.com/a/12553149
