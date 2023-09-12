@@ -722,8 +722,8 @@ void drawHud(const uint type)
         // center hud
         const int left = winw2-177;
         int top = winh2-152;
-        SDL_FillRect(sHud, &(SDL_Rect){winw2-193, top-3, 382, 281}, 0x33FFFFFF);
-        SDL_FillRect(sHud, &(SDL_Rect){winw2-190, top, 376, 275}, 0xCC000000);
+        SDL_FillRect(sHud, &(SDL_Rect){winw2-193, top-3, 382, 303}, 0x33FFFFFF);
+        SDL_FillRect(sHud, &(SDL_Rect){winw2-190, top, 376, 297}, 0xCC000000);
         int a = drawText(sHud, "Woxel", winw2-15, top+11, 3);
         a = drawText(sHud, appVersion, left+330, top+11, 4);
         a = drawText(sHud, "woxels.github.io", left, top+11, 4);
@@ -795,6 +795,9 @@ void drawHud(const uint type)
         top += 11;
         a = drawText(sHud, "F8 ", left, top, 2);
         drawText(sHud, "Load. Will erase what you have done since the last save.", a, top, 1);
+
+        top += 22;
+        drawText(sHud, "Check the console output for more information.", left, top, 3);
     
         for(uint i = 0; i < 16; i++)
         {
@@ -1145,7 +1148,7 @@ int main(int argc, char** argv)
                             uchar r = (tu & 0x00FF0000) >> 16;
                             uchar gc = (tu & 0x0000FF00) >> 8;
                             uchar b = (tu & 0x000000FF);
-                            if(r != 0 && gc != 0 && b != 0)
+                            if(r != 0 || gc != 0 || b != 0)
                                 fprintf(f, "%i %i %i %02X%02X%02X\n", ((int)x)-64, ((int)y)-64, z, r, gc, b);
                         }
                     }
@@ -1175,7 +1178,7 @@ int main(int argc, char** argv)
                             uchar r = (tu & 0x00FF0000) >> 16;
                             uchar gc = (tu & 0x0000FF00) >> 8;
                             uchar b = (tu & 0x000000FF);
-                            if(r != 0 && gc != 0 && b != 0)
+                            if(r != 0 || gc != 0 || b != 0)
                             {
                                 if( x <=   0 || y <=   0 || z <=   0 ||
                                     x >= 127 || y >= 127 || z >= 127 ||
@@ -1215,7 +1218,7 @@ int main(int argc, char** argv)
                             uchar r = (tu & 0x00FF0000) >> 16;
                             uchar gc = (tu & 0x0000FF00) >> 8;
                             uchar b = (tu & 0x000000FF);
-                            if(r != 0 && gc != 0 && b != 0)
+                            if(r != 0 || gc != 0 || b != 0)
                             {
                                 if(g.voxels[PTIB(x-1, y, z)] == 0){vc+=6;}
                                 if(g.voxels[PTIB(x+1, y, z)] == 0){vc+=6;}
@@ -1254,7 +1257,7 @@ int main(int argc, char** argv)
                             uchar r = (tu & 0x00FF0000) >> 16;
                             uchar gc = (tu & 0x0000FF00) >> 8;
                             uchar b = (tu & 0x000000FF);
-                            if(r != 0 && gc != 0 && b != 0)
+                            if(r != 0 || gc != 0 || b != 0)
                             {
                                 if(g.voxels[PTIB(x-1, y, z)] == 0){fw_mx(f, x, y, z, r, gc, b);}
                                 if(g.voxels[PTIB(x+1, y, z)] == 0){fw_px(f, x, y, z, r, gc, b);}
