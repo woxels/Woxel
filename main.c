@@ -908,6 +908,7 @@ void drawHud(const uint type)
             if(mirror == 1)
             {
                 setpixel(sHud, winw2+2, winh2+2, sclr);
+                setpixel(sHud, winw2-2, winh2-2, sclr);
                 //
                 setpixel(sHud, winw2+3, winh2+2, sclr);
                 setpixel(sHud, winw2-3, winh2-2, sclr);
