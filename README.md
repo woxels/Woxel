@@ -10,7 +10,8 @@ Woxel uses intuitive controls identical to Minetest and Minecraft, while providi
 * 🔗 **Flatpak:** https://flathub.org/apps/xyz.woxel.Woxel
 * 🔗 **Snapcraft:** https://snapcraft.io/woxel
 * 🔗 **Ubuntu:** https://github.com/woxels/Woxel/releases/download/1.0/wox
-* 🔗 **WebGL:** https://woxel.xyz / https://woxels.github.io
+* 🔗 **WebGL:** https://woxel.xyz 
+https://woxels.github.io
 
 *(it's broken on wayland, use the [WebGL](https://woxels.github.io) version)*
 
