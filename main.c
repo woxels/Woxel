@@ -685,7 +685,7 @@ void main_loop()
                                                             }
                                                             , 8 * 3 * sizeof(float), GL_STATIC_DRAW);
         esRebind(GL_ELEMENT_ARRAY_BUFFER, &mdlVoxel.iid, &(GLbyte[]){0,1,2,3,0,4,5,6,7,4,5,1,2,6,7,3}, 16, GL_STATIC_DRAW);
-        glDrawElements(GL_LINE_STRIP, voxel_numind, GL_UNSIGNED_BYTE, 0);
+        glDrawElements(GL_LINE_STRIP, 16, GL_UNSIGNED_BYTE, 0);
         esRebind(GL_ARRAY_BUFFER,         &mdlVoxel.vid, voxel_vertices, sizeof(voxel_vertices), GL_STATIC_DRAW);
         esRebind(GL_ELEMENT_ARRAY_BUFFER, &mdlVoxel.iid, voxel_indices,  sizeof(voxel_indices),  GL_STATIC_DRAW);
 
