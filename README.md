@@ -1,8 +1,6 @@
---
-
 **Please use the Web Version at https://Woxel.xyz which is regularly updated.** Development on this version has stopped until we can find a portability middleware that works with both Gnome and Wayland, GLFW 3.3.8 may be an option but this needs to be tested, otherwise we can only hope SDL3 improves the situation, but I am not keeping my hopes up.
 
---
+---
 
 ![woxel header](https://raw.githubusercontent.com/woxels/woxels.github.io/main/woxelbanner.png)
 
