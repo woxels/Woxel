@@ -81,6 +81,10 @@ cc main.c -Ofast -lm -lz -lSDL2 -lGLESv2 -lEGL -o wox
 ./wox
 ```
 
+## Similar Software
+https://github.com/mrbid/VoxelPaint
+https://github.com/mrbid/VoxelPaintPro
+
 ## Info
 * 🎨 https://lospec.com/palette-list/resurrect-32
 * ⭐ https://dibesfer.com 
