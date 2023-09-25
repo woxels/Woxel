@@ -42,13 +42,13 @@ mat view;
 // globals
 //*************************************
 const char appTitle[] = "Woxel"; // or loxel?
-const char appVersion[] = "v1.0";
+const char appVersion[] = "v1.1";
 char openTitle[256]="Untitled";
 char *basedir, *appdir;
 SDL_Window* wnd;
 SDL_GLContext glc;
 SDL_Surface* s_icon = NULL;
-int mx=0, my=0, lx=0, ly=0;
+int mx=0, my=0, xd=0, yd=0;
 int winw = 1024, winh = 768;
 int winw2 = 512, winh2 = 384;
 float ww, wh;
@@ -95,7 +95,7 @@ typedef struct
 game_state;
 game_state g;
 // point to index & vice-versa
-uint PTI(const uchar x, const uchar y, const uchar z) // 0-128
+uint PTI(const uchar x, const uchar y, const uchar z)
 {
     return (z * 16384) + (y * 128) + x;
 }
@@ -141,12 +141,19 @@ uint isInBounds(const vec p)
 //     if(p.z > 127.5f){p.z = 127.5f;}
 //     return 1;
 // }
-uint PTIB(const uchar x, const uchar y, const uchar z) // 0-128
+uint PTIB(const uchar x, const uchar y, const uchar z)
 {
     uint r = (z * 16384) + (y * 128) + x;
     if(r > max_voxels-1){r = max_voxels-1;}
     return r;
 }
+int PTIB2(const uchar x, const uchar y, const uchar z)
+{
+    uint r = (z * 16384) + (y * 128) + x;
+    if(r > max_voxels-1){return -1;}
+    return r;
+}
+
 
 //*************************************
 // ray functions
