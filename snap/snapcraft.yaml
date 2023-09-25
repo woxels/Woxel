@@ -1,6 +1,6 @@
 name: woxel
 base: core22
-version: '1.0'
+version: '1.1'
 license: GPL-2.0-only
 summary: Open Source 3D voxel editor that's better than Goxel ;p
 description: |
