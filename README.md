@@ -15,7 +15,7 @@ Woxel uses intuitive controls identical to Minetest and Minecraft, while providi
 ## Download
 * 🔗 **Flatpak:** https://flathub.org/apps/xyz.woxel.Woxel
 * 🔗 **Snapcraft:** https://snapcraft.io/woxel
-* 🔗 **Ubuntu:** https://github.com/woxels/Woxel/releases/download/1.0/wox
+* 🔗 **Ubuntu:** https://github.com/woxels/Woxel/releases
 * 🔗 **WebGL:** https://woxel.xyz / https://woxels.github.io
 
 ## Input Mapping
