@@ -64,9 +64,13 @@ void main_loop()
                     SDL_ShowCursor(1 - focus_mouse);
                     if(focus_mouse == 1)
                     {
-                        mx = winw2, my = winh2;
-                        lx = winw2, ly = winh2;
-                        SDL_WarpMouseInWindow(wnd, winw2, winh2);
+                        SDL_GetRelativeMouseState(&xd, &yd);
+                        SDL_SetRelativeMouseMode(SDL_TRUE);
+                    }
+                    else
+                    {
+                        SDL_GetRelativeMouseState(&xd, &yd);
+                        SDL_SetRelativeMouseMode(SDL_FALSE);
                     }
                 }
                 else if(event.key.keysym.sym == SDLK_F2)
@@ -329,6 +333,7 @@ void main_loop()
             {
                 mx = event.motion.x;
                 my = event.motion.y;
+
                 if(focus_mouse == 0){break;}
                 idle = t;
             }
@@ -345,8 +350,6 @@ void main_loop()
 
             case SDL_MOUSEBUTTONDOWN:
             {
-                lx = event.button.x;
-                ly = event.button.y;
                 mx = event.button.x;
                 my = event.button.y;
 
@@ -354,6 +357,8 @@ void main_loop()
                 {
                     SDL_ShowCursor(0);
                     focus_mouse = 1;
+                    SDL_GetRelativeMouseState(&xd, &yd);
+                    SDL_SetRelativeMouseMode(SDL_TRUE);
                     break;
                 }
 
@@ -571,12 +576,11 @@ void main_loop()
             g.yrot -= 0.7f*dt;
 
         // camera/mouse control
-        const float xd = lx-mx;
-        const float yd = ly-my;
+        SDL_GetRelativeMouseState(&xd, &yd);
         if(xd != 0 || yd != 0)
         {
-            g.xrot += xd*g.sens;
-            g.yrot += yd*g.sens;
+            g.xrot -= xd*g.sens;
+            g.yrot -= yd*g.sens;
 
             if(g.plock == 1)
             {
@@ -592,9 +596,6 @@ void main_loop()
                 if(g.yrot < 0.1f)
                     g.yrot = 0.1f;
             }
-            
-            lx = winw2, ly = winh2;
-            SDL_WarpMouseInWindow(wnd, lx, ly);
         }
     }
 
@@ -717,6 +718,9 @@ void main_loop()
 }
 void drawHud(const uint type)
 {
+    // window decorations
+    SDL_FillRect(sHud, &(SDL_Rect){0, 0, winw, 20}, 0x00000000);
+
     // clear cpu hud before rendering to it
     SDL_FillRect(sHud, &sHud->clip_rect, 0x00000000);
     if(type == 0)
@@ -1239,12 +1243,18 @@ int main(int argc, char** argv)
                             uchar b = (tu & 0x000000FF);
                             if(r != 0 || gc != 0 || b != 0)
                             {
-                                if(g.voxels[PTIB(x-1, y, z)] == 0){vc+=6;}
-                                if(g.voxels[PTIB(x+1, y, z)] == 0){vc+=6;}
-                                if(g.voxels[PTIB(x, y-1, z)] == 0){vc+=6;}
-                                if(g.voxels[PTIB(x, y+1, z)] == 0){vc+=6;}
-                                if(g.voxels[PTIB(x, y, z-1)] == 0){vc+=6;}
-                                if(g.voxels[PTIB(x, y, z+1)] == 0){vc+=6;}
+                                int r = PTIB2(x-1, y, z);
+                                if(r < 0 || g.voxels[r] == 0){vc+=6;}
+                                r = PTIB2(x+1, y, z);
+                                if(r < 0 || g.voxels[r] == 0){vc+=6;}
+                                r = PTIB2(x, y-1, z);
+                                if(r < 0 || g.voxels[r] == 0){vc+=6;}
+                                r = PTIB2(x, y+1, z);
+                                if(r < 0 || g.voxels[r] == 0){vc+=6;}
+                                r = PTIB2(x, y, z-1);
+                                if(r < 0 || g.voxels[r] == 0){vc+=6;}
+                                r = PTIB2(x, y, z+1);
+                                if(r < 0 || g.voxels[r] == 0){vc+=6;}
                 }}}}
                 // but it's unlikely to ever be that expensive that anyone would notice this inefficiency
                 fprintf(f, "ply\n");
@@ -1273,17 +1283,23 @@ int main(int argc, char** argv)
                             const uint i = PTI(x,y,z);
                             if(g.voxels[i] < 8){continue;}
                             const uint tu = g.colors[g.voxels[i]-1];
-                            uchar r = (tu & 0x00FF0000) >> 16;
-                            uchar gc = (tu & 0x0000FF00) >> 8;
-                            uchar b = (tu & 0x000000FF);
-                            if(r != 0 || gc != 0 || b != 0)
+                            uchar cr = (tu & 0x00FF0000) >> 16;
+                            uchar cg = (tu & 0x0000FF00) >> 8;
+                            uchar cb = (tu & 0x000000FF);
+                            if(cr != 0 || cg != 0 || cb != 0)
                             {
-                                if(g.voxels[PTIB(x-1, y, z)] == 0){fw_mx(f, x, y, z, r, gc, b);}
-                                if(g.voxels[PTIB(x+1, y, z)] == 0){fw_px(f, x, y, z, r, gc, b);}
-                                if(g.voxels[PTIB(x, y-1, z)] == 0){fw_my(f, x, y, z, r, gc, b);}
-                                if(g.voxels[PTIB(x, y+1, z)] == 0){fw_py(f, x, y, z, r, gc, b);}
-                                if(g.voxels[PTIB(x, y, z-1)] == 0){fw_mz(f, x, y, z, r, gc, b);}
-                                if(g.voxels[PTIB(x, y, z+1)] == 0){fw_pz(f, x, y, z, r, gc, b);}
+                                int r = PTIB2(x-1, y, z);
+                                if(r < 0 || g.voxels[r] == 0){fw_mx(f, x, y, z, cr, cg, cb);}
+                                r = PTIB2(x+1, y, z);
+                                if(r < 0 || g.voxels[r] == 0){fw_px(f, x, y, z, cr, cg, cb);}
+                                r = PTIB2(x, y-1, z);
+                                if(r < 0 || g.voxels[r] == 0){fw_my(f, x, y, z, cr, cg, cb);}
+                                r = PTIB2(x, y+1, z);
+                                if(r < 0 || g.voxels[r] == 0){fw_py(f, x, y, z, cr, cg, cb);}
+                                r = PTIB2(x, y, z-1);
+                                if(r < 0 || g.voxels[r] == 0){fw_mz(f, x, y, z, cr, cg, cb);}
+                                r = PTIB2(x, y, z+1);
+                                if(r < 0 || g.voxels[r] == 0){fw_pz(f, x, y, z, cr, cg, cb);}
                             }
                         }
                     }
@@ -1353,6 +1369,7 @@ int main(int argc, char** argv)
         printf("ERROR: SDL_GL_CreateContext(): %s\n", SDL_GetError());
         return 1;
     }
+    SDL_SetRelativeMouseMode(SDL_TRUE);
 
     // set icon
     s_icon = surfaceFromData((Uint32*)&icon, 16, 16);
