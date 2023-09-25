@@ -1,8 +1,3 @@
-# ⚠️ Wayland issues using SDL2 & OpenGL ES.
-**Please use the Web Version at https://Woxel.xyz which is regularly updated.** Development on this version has stopped until we can find a portability middleware that works with both Gnome and Wayland.
-
----
-
 ![woxel header](https://raw.githubusercontent.com/woxels/woxels.github.io/main/woxelbanner.png)
 
 ![screenshot](https://raw.githubusercontent.com/woxels/woxels.github.io/main/Screenshot_2023-09-02_07-06-18.png)
@@ -13,7 +8,7 @@ Woxel uses intuitive controls identical to Minetest and Minecraft, while providi
 📱 Follow us on Twitter! https://twitter.com/Woxels
 
 ## Download
-* 🔗 **Flatpak:** https://flathub.org/apps/xyz.woxel.Woxel
+* 🔗 **Flatpak:** https://flathub.org/apps/xyz.woxel.Woxel *(no libdecor on Wayland)*
 * 🔗 **Snapcraft:** https://snapcraft.io/woxel
 * 🔗 **Ubuntu:** https://github.com/woxels/Woxel/releases
 * 🔗 **WebGL:** https://woxel.xyz / https://woxels.github.io
