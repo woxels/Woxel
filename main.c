@@ -718,9 +718,6 @@ void main_loop()
 }
 void drawHud(const uint type)
 {
-    // window decorations
-    SDL_FillRect(sHud, &(SDL_Rect){0, 0, winw, 20}, 0x00000000);
-
     // clear cpu hud before rendering to it
     SDL_FillRect(sHud, &sHud->clip_rect, 0x00000000);
     if(type == 0)
