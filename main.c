@@ -1369,7 +1369,6 @@ int main(int argc, char** argv)
         printf("ERROR: SDL_GL_CreateContext(): %s\n", SDL_GetError());
         return 1;
     }
-    SDL_SetRelativeMouseMode(SDL_TRUE);
 
     // set icon
     s_icon = surfaceFromData((Uint32*)&icon, 16, 16);
