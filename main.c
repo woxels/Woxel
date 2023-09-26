@@ -408,6 +408,8 @@ void main_loop()
                     {
                         drag=0;
                         size=0;
+                        SDL_GetWindowSize(wnd, &winw, &winh);
+                        WOX_POP(winw, winh);
                         SDL_CaptureMouse(SDL_FALSE);
                     }
                     ptt = 0.f;
