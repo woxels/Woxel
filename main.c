@@ -8,6 +8,26 @@
 */
 #include "inc/excess.h"
 //#define BENCH_FPS
+void WOX_QUIT()
+{
+    SDL_HideWindow(wnd);
+    saveState(openTitle, "", load_state);
+    drawText(NULL, "*K", 0, 0, 0);
+    SDL_FreeSurface(s_icon);
+    SDL_FreeSurface(sHud);
+    SDL_GL_DeleteContext(glc);
+    SDL_DestroyWindow(wnd);
+    SDL_Quit();
+    exit(0);
+}
+void WOX_POP(const int w, const int h)
+{
+    winw = w;
+    winh = h;
+    winw2 = winw/2;
+    winh2 = winh/2;
+    doPerspective();
+}
 void main_loop()
 {
     // time delta
@@ -49,6 +69,45 @@ void main_loop()
         idle = 0.f; // so we only save once
         // on input a new idle is set, and a
         // count-down for a new save begins.
+    }
+
+    // window decor stuff
+    if(drag == 1)
+    {
+        static int lx=0, ly=0;
+        static float lt = 0;
+        if(t > lt)
+        {
+            if(lx != mx || ly != my)
+            {
+                int x,y;
+                SDL_GetWindowPosition(wnd, &x, &y);
+                SDL_SetWindowPosition(wnd, x+(mx-dsx), y+(my-dsy));
+                lx = mx, ly = my;
+            }
+            lt = t+0.03f;
+        }
+    }
+    if(size == 1)
+    {
+        static float lt = 0;
+        if(t > lt)
+        {
+            int w,h;
+            SDL_GetWindowSize(wnd, &w, &h);
+            winw = w+(mx-dsx);
+            winh = h+(my-dsy);
+            dsx = mx;
+            dsy = my;
+            if(winw > 800 && winh > 600)
+            {
+                SDL_SetWindowSize(wnd, winw, winh);
+                winw2 = winw/2;
+                winh2 = winh/2;
+                doPerspective();
+            }
+            lt = t+0.03f;
+        }
     }
     
     SDL_Event event;
@@ -260,6 +319,8 @@ void main_loop()
                 }
                 else if(event.key.keysym.sym == SDLK_F1)
                 {
+                    SDL_SetWindowSize(wnd, 1024, 768);
+                    WOX_POP(1024, 768);
                     defaultState(0);
                     fks = 0;
                 }
@@ -341,7 +402,16 @@ void main_loop()
 
             case SDL_MOUSEBUTTONUP:
             {
-                if(event.button.button == SDL_BUTTON_LEFT){ptt = 0.f;}
+                if(event.button.button == SDL_BUTTON_LEFT)
+                {
+                    if(drag == 1 || size == 1)
+                    {
+                        drag=0;
+                        size=0;
+                        SDL_CaptureMouse(SDL_FALSE);
+                    }
+                    ptt = 0.f;
+                }
                 else if(event.button.button == SDL_BUTTON_RIGHT){dtt = 0.f;}
                 else if(event.button.button == SDL_BUTTON_X2){rtt = 0.f;}
                 idle = t;
@@ -353,6 +423,48 @@ void main_loop()
                 mx = event.button.x;
                 my = event.button.y;
 
+                if(event.button.button == SDL_BUTTON_LEFT) // check window decor stuff
+                {
+                    if(focus_mouse == 0)
+                    {
+                        if(my < 22)
+                        {
+                            if(mx < 14)
+                            {
+                                WOX_QUIT();
+                                break;
+                            }
+                            else if(mx < 28)
+                            {
+                                SDL_MinimizeWindow(wnd);
+                                break;
+                            }
+                            else if(mx > winw-14)
+                            {
+                                WOX_QUIT();
+                                break;
+                            }
+                            else if(mx > winw-28)
+                            {
+                                SDL_MinimizeWindow(wnd);
+                                break;
+                            }
+
+                            dsx = mx, dsy = my;
+                            drag=1;
+                            SDL_CaptureMouse(SDL_TRUE);
+                            break;
+                        }
+                        else if(mx > winw-15 && my > winh-15)
+                        {
+                            size = 1;
+                            dsx = mx, dsy = my;
+                            SDL_CaptureMouse(SDL_TRUE);
+                            break;
+                        }
+                    }
+                }
+                
                 if(focus_mouse == 0) // lock mouse focus on every mouse input to the window
                 {
                     SDL_ShowCursor(0);
@@ -427,27 +539,13 @@ void main_loop()
             case SDL_WINDOWEVENT:
             {
                 if(event.window.event == SDL_WINDOWEVENT_RESIZED)
-                {
-                    winw = event.window.data1;
-                    winh = event.window.data2;
-                    winw2 = winw/2;
-                    winh2 = winh/2;
-                    doPerspective();
-                }
+                    WOX_POP(event.window.data1, event.window.data2);
             }
             break;
 
             case SDL_QUIT:
             {
-                SDL_HideWindow(wnd);
-                saveState(openTitle, "", load_state);
-                drawText(NULL, "*K", 0, 0, 0);
-                SDL_FreeSurface(s_icon);
-                SDL_FreeSurface(sHud);
-                SDL_GL_DeleteContext(glc);
-                SDL_DestroyWindow(wnd);
-                SDL_Quit();
-                exit(0);
+                WOX_QUIT();
             }
             break;
         }
@@ -722,11 +820,20 @@ void drawHud(const uint type)
     SDL_FillRect(sHud, &sHud->clip_rect, 0x00000000);
     if(type == 0)
     {
+        // window title
+        SDL_FillRect(sHud, &(SDL_Rect){0, 0, winw, 19}, 0x11FFFFFF);
+        const uint len = lenText("Woxel.xyz"); 
+        drawText(sHud, "Woxel.xyz", winw2-25, 4, 3);
+        drawText(sHud, "X -", 4, 4, 3);
+        drawText(sHud, "- X", winw-22, 4, 3);
+        SDL_FillRect(sHud, &(SDL_Rect){winw-15, winh-15, 15, 15}, 0x11FFFFFF);
+        drawText(sHud, "r", winw-9, winh-13, 3);
+
         // fps
         char tmp[16];
         sprintf(tmp, "%u", g_fps);
-        SDL_FillRect(sHud, &(SDL_Rect){0, 0, lenText(tmp)+8, 19}, 0xCC000000);
-        drawText(sHud, tmp, 4, 4, 2);
+        SDL_FillRect(sHud, &(SDL_Rect){0, 22, lenText(tmp)+8, 19}, 0xCC000000);
+        drawText(sHud, tmp, 4, 26, 2);
         // center hud
         const int left = winw2-177;
         int top = winh2-152;
@@ -1348,7 +1455,7 @@ int main(int argc, char** argv)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-    wnd = SDL_CreateWindow(appTitle, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winw, winh, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
+    wnd = SDL_CreateWindow(appTitle, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winw, winh, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_BORDERLESS);
     while(wnd == NULL)
     {
         if(msaa == 0)
@@ -1357,7 +1464,7 @@ int main(int argc, char** argv)
             return 1;
         }
         SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, msaa/2);
-        wnd = SDL_CreateWindow(appTitle, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winw, winh, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
+        wnd = SDL_CreateWindow(appTitle, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winw, winh, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_BORDERLESS);
     }
     SDL_GL_SetSwapInterval(1);
     glc = SDL_GL_CreateContext(wnd);
