@@ -440,6 +440,8 @@ void main_loop()
                                 maxed = 1;
                                 drag = 0;
                                 size = 0;
+                                llct = t;
+                                break;
                             }
                             else
                             {
@@ -447,6 +449,8 @@ void main_loop()
                                 maxed = 0;
                                 drag = 0;
                                 size = 0;
+                                llct = t;
+                                break;
                             }
                         }
                         llct = t;
