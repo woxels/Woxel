@@ -148,8 +148,9 @@ uint PTIB(const uchar x, const uchar y, const uchar z)
     if(r > max_voxels-1){r = max_voxels-1;}
     return r;
 }
-int PTIB2(const uchar x, const uchar y, const uchar z)
+int PTIB2(const char x, const char y, const char z)
 {
+    if(x < 0 || y < 0 || z < 0){return -1;}
     uint r = (z * 16384) + (y * 128) + x;
     if(r > max_voxels-1){return -1;}
     return r;
