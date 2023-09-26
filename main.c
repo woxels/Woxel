@@ -99,7 +99,7 @@ void main_loop()
             winh = h+(my-dsy);
             dsx = mx;
             dsy = my;
-            if(winw > 800 && winh > 600)
+            if(winw > 380 && winh > 380)
             {
                 SDL_SetWindowSize(wnd, winw, winh);
                 winw2 = winw/2;
