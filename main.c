@@ -1344,10 +1344,10 @@ int main(int argc, char** argv)
                             const uint i = PTI(x,y,z);
                             if(g.voxels[i] < 8){continue;}
                             const uint tu = g.colors[g.voxels[i]-1];
-                            uchar r = (tu & 0x00FF0000) >> 16;
-                            uchar gc = (tu & 0x0000FF00) >> 8;
-                            uchar b = (tu & 0x000000FF);
-                            if(r != 0 || gc != 0 || b != 0)
+                            uchar cr = (tu & 0x00FF0000) >> 16;
+                            uchar cg = (tu & 0x0000FF00) >> 8;
+                            uchar cb = (tu & 0x000000FF);
+                            if(cr != 0 || cg != 0 || cb != 0)
                             {
                                 int r = PTIB2(x-1, y, z);
                                 if(r < 0 || g.voxels[r] == 0){vc+=6;}
