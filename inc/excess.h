@@ -42,7 +42,7 @@ mat view;
 // globals
 //*************************************
 const char appTitle[] = "Woxel"; // or loxel?
-const char appVersion[] = "v1.1";
+const char appVersion[] = "v1.2";
 char openTitle[256]="Untitled";
 char *basedir, *appdir;
 SDL_Window* wnd;
@@ -53,6 +53,7 @@ int winw = 1024, winh = 768;
 int winw2 = 512, winh2 = 384;
 float ww, wh;
 float aspect, t = 0.f;
+uint drag=0,size=0,dsx=0,dsy=0;
 uint g_fps = 0;
 uint ks[10] = {0};      // keystate
 uint focus_mouse = 0;   // mouse lock
