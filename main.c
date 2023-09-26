@@ -425,10 +425,31 @@ void main_loop()
                 mx = event.button.x;
                 my = event.button.y;
 
+                static float llct = 0.f;
+                static uint maxed = 0;
+
                 if(event.button.button == SDL_BUTTON_LEFT) // check window decor stuff
                 {
                     if(focus_mouse == 0)
                     {
+                        if(llct != 0.f && t-llct < 0.3f)
+                        {
+                            if(maxed == 0)
+                            {
+                                SDL_MaximizeWindow(wnd);
+                                maxed = 1;
+                                drag = 0;
+                                size = 0;
+                            }
+                            else
+                            {
+                                SDL_RestoreWindow(wnd);
+                                maxed = 0;
+                                drag = 0;
+                                size = 0;
+                            }
+                        }
+                        llct = t;
                         if(my < 22)
                         {
                             if(mx < 14)
