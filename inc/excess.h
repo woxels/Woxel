@@ -219,12 +219,12 @@ int ray(vec* hit_pos, vec pos) // look vector is still a global, not going to me
 		.z = (((dir.z + 1.f) / 2.f) - ((pos.z + 0.5f) - floorf(pos.z  + 0.5f))) / look_dir.z,
 	};
 
-	printf("Look dir: (%.02f, %.02f, %.02f)\n", look_dir.x, look_dir.y, look_dir.z);
-	printf("Pos: (%.02f, %.02f, %.02f)\n", pos.x, pos.y, pos.z);
+	// printf("Look dir: (%.02f, %.02f, %.02f)\n", look_dir.x, look_dir.y, look_dir.z);
+	// printf("Pos: (%.02f, %.02f, %.02f)\n", pos.x, pos.y, pos.z);
 
 	while (1) {
-		printf("Distance remaining: (%.02f, %.02f, %.02f)\n", dist_remaining.x, dist_remaining.y, dist_remaining.z);
-		printf("Absolute distance remaining: (%.02f, %.02f, %.02f)\n", dist_remaining.x * look_dir.x, dist_remaining.y * look_dir.y, dist_remaining.z * look_dir.z);
+		// printf("Distance remaining: (%.02f, %.02f, %.02f)\n", dist_remaining.x, dist_remaining.y, dist_remaining.z);
+		// printf("Absolute distance remaining: (%.02f, %.02f, %.02f)\n", dist_remaining.x * look_dir.x, dist_remaining.y * look_dir.y, dist_remaining.z * look_dir.z);
 
 		if (dist_remaining.x < dist_remaining.y && dist_remaining.x < dist_remaining.z) {
 			pos.x += look_dir.x * dist_remaining.x;
@@ -247,7 +247,7 @@ int ray(vec* hit_pos, vec pos) // look vector is still a global, not going to me
 					.y = 0.1f + roundf(pos.y),
 					.z = 0.1f + roundf(pos.z),
 				};
-				printf("Hit: (%.02f, %.02f, %.02f)\n", hit_pos->x, hit_pos->y, hit_pos->z);
+				// printf("Hit: (%.02f, %.02f, %.02f)\n", hit_pos->x, hit_pos->y, hit_pos->z);
 				return index;
 			}
 		} else if (dist_remaining.y < dist_remaining.z) {
@@ -271,7 +271,7 @@ int ray(vec* hit_pos, vec pos) // look vector is still a global, not going to me
 					.y = 0.1f + pos.y - dir2.y,
 					.z = 0.1f + roundf(pos.z),
 				};
-				printf("Hit: (%.02f, %.02f, %.02f)\n", hit_pos->x, hit_pos->y, hit_pos->z);
+				// printf("Hit: (%.02f, %.02f, %.02f)\n", hit_pos->x, hit_pos->y, hit_pos->z);
 				return index;
 			}
 		} else {
@@ -295,7 +295,7 @@ int ray(vec* hit_pos, vec pos) // look vector is still a global, not going to me
 					.y = 0.1f + roundf(pos.y),
 					.z = 0.1f + pos.z - dir2.z,
 				};
-				printf("Hit: (%.02f, %.02f, %.02f)\n", hit_pos->x, hit_pos->y, hit_pos->z);
+				// printf("Hit: (%.02f, %.02f, %.02f)\n", hit_pos->x, hit_pos->y, hit_pos->z);
 				return index;
 			}
 		}
