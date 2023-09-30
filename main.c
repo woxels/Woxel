@@ -6,1585 +6,858 @@
     C & SDL / OpenGL ES2 / GLSL ES
     Colour Converter: https://www.easyrgb.com
 */
-#include "inc/excess.h"
-//#define BENCH_FPS
-void WOX_QUIT()
+
+#pragma GCC diagnostic ignored "-Wtrigraphs"
+
+#include <time.h>
+#include <zlib.h>
+
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_opengles2.h>
+
+#ifdef __linux__
+    #include <sys/time.h>
+    #include <locale.h>
+#endif
+
+#include "esVoxel.h"
+
+#define uint GLuint
+#define sint GLint
+#define uchar unsigned char
+
+// render state id's
+GLint projection_id;
+GLint view_id;
+GLint position_id;
+GLint voxel_id;
+GLint texcoord_id;
+GLint sampler_id;
+
+// render state matrices
+mat projection;
+mat view;
+
+//*************************************
+// globals
+//*************************************
+const char appTitle[] = "Woxel"; // or loxel?
+const char appVersion[] = "v1.2";
+char openTitle[256]="Untitled";
+char *basedir, *appdir;
+SDL_Window* wnd;
+SDL_GLContext glc;
+SDL_Surface* s_icon = NULL;
+int mx=0, my=0, xd=0, yd=0;
+int winw = 1024, winh = 768;
+int winw2 = 512, winh2 = 384;
+float ww, wh;
+float aspect, t = 0.f;
+uint drag=0,size=0,dsx=0,dsy=0;
+uint g_fps = 0;
+uint ks[10] = {0};      // keystate
+uint focus_mouse = 0;   // mouse lock
+uint showhud = 1;       // hud visibility
+float vdist = 4096.f;   // view distance
+vec ipp;                // inverse player position
+vec look_dir;           // camera look direction
+int lray = 0;           // pointed at node index
+float ptt = 0.f;        // place timing trigger (for repeat place)
+float dtt = 0.f;        // delete timing trigger (for repeat delete)
+float rtt = 0.f;        // replace timing trigger (for repeat replace)
+float rrsp = 0.3f;      // repeat replace speed
+uint fks = 0;           // F-Key state (fast mode toggle)
+float bigc = 0.f;       // big cursor start time
+Uint32 sclr = 0;        // selected color
+uint load_state = 0;    // loaded from appdir or custom path?
+uint mirror = 0;        // mirror brush state
+vec ghp;                // global ray hit position
+
+//*************************************
+// game state functions
+//*************************************
+// game data (for fast save and load)
+#define max_voxels 2097152 // 2.097 million
+typedef struct
 {
-    SDL_HideWindow(wnd);
-    saveState(openTitle, "", load_state);
-    drawText(NULL, "*K", 0, 0, 0);
-    SDL_FreeSurface(s_icon);
+    vec pp;     // player position
+    vec pb;     // place block pos
+    float sens; // mouse sensitivity
+    float xrot; // camera x-axis rotation
+    float yrot; // camera y-axis rotation
+    float st;   // selected color
+    float ms;   // player move speed
+    float cms;  // custom move speed (high)
+    float lms;  // custom move speed (low)
+    uchar plock;// pitchlock on/off toggle
+    uint colors[39]; // color palette (7 system, 32 user)
+    uchar voxels[max_voxels]; // x,y,z,w (w = color_id)
+}
+game_state;
+game_state g;
+// point to index & vice-versa
+uint PTI(const uchar x, const uchar y, const uchar z)
+{
+    return (z * 16384) + (y * 128) + x;
+}
+// vec ITP(const float i)
+// {
+//     const float z = i * 6.1035156E-5f; // i / 16384.f;
+//     const float a = floorf(z);
+//     const float b = (z-floorf(z)) * 128.f;
+//     const float c = (b-floorf(b)) * 128.f;
+//     return (vec){roundf(c),roundf(b),roundf(a)};
+// }
+void defaultState(const uint type)
+{
+    g.sens = 0.003f;
+    g.xrot = 0.f;
+    g.yrot = 1.57f;
+    g.pp = (vec){-64.f, 130.f, -64.f};
+    if(type == 0){g.ms = 37.2f;}
+    g.st = 8.f;
+    g.pb = (vec){0.f, 0.f, 0.f, -1.f};
+    if(type == 0){g.lms = 37.2f, g.cms = 74.4f;}
+    g.plock = 0;
+}
+uint placedVoxels()
+{
+    uint c = 0;
+    for(uint i = 0; i < max_voxels; i++)
+        if(g.voxels[i] != 0){c++;}
+    return c;
+}
+uint isInBounds(const vec p)
+{
+    if(p.x < -0.5f || p.y < -0.5f || p.z < -0.5f || p.x > 127.5f || p.y > 127.5f || p.z > 127.5f){return 0;}
+    return 1;
+}
+// uint forceInBounds(vec p)
+// {
+//     if(p.x < -0.5f){p.x = -0.5f;}
+//     if(p.y < -0.5f){p.y = -0.5f;}
+//     if(p.z < -0.5f){p.z = -0.5f;}
+//     if(p.x > 127.5f){p.x = 127.5f;}
+//     if(p.y > 127.5f){p.y = 127.5f;}
+//     if(p.z > 127.5f){p.z = 127.5f;}
+//     return 1;
+// }
+uint PTIB(const uchar x, const uchar y, const uchar z)
+{
+    uint r = (z * 16384) + (y * 128) + x;
+    if(r > max_voxels-1){r = max_voxels-1;}
+    return r;
+}
+int PTIB2(const char x, const char y, const char z)
+{
+    if(x < 0 || y < 0 || z < 0){return -1;}
+    uint r = (z * 16384) + (y * 128) + x;
+    if(r > max_voxels-1){return -1;}
+    return r;
+}
+
+
+//*************************************
+// ray functions
+//*************************************/
+int oldray(vec* hit_pos, vec* hit_vec, const vec start_pos) // the look vector is a global
+{
+    // might need exclude conditions for obviously bogus rays to avoid those 2048 steps
+    vec inc;
+    vMulS(&inc, look_dir, 0.015625f); // 0.0625f
+    int hit = -1;
+    vec rp = start_pos;
+    for(uint i = 0; i < 8192; i++) // 2048
+    {
+        vAdd(&rp, rp, inc);
+        if(isInBounds(rp) == 0){continue;} // break;
+        vec rb;
+        rb.x = roundf(rp.x);
+        rb.y = roundf(rp.y);
+        rb.z = roundf(rp.z);
+        const uint vi = PTI(rb.x, rb.y, rb.z);
+        //printf("ray: %u: %f %f %f\n", vi, rb.x, rb.y, rb.z);
+        if(g.voxels[vi] != 0)
+        {
+            *hit_vec = (vec){rp.x-rb.x, rp.y-rb.y, rp.z-rb.z};
+            *hit_pos = (vec){rb.x, rb.y, rb.z};
+            hit = vi;
+            break;
+        }
+        if(hit > -1){break;}
+    }
+    return hit;
+}
+
+int ray(vec* hit_pos, vec pos) // look vector is still a global, not going to mess with that for now
+{ // WARNING: currently only works when pos is within the world, TODO: remove this limitation
+	if (pos.x < 0.f || pos.x > 127.f || pos.y < 0.f || pos.y > 127.f || pos.z < 0.f || pos.z > 127.f) {
+		return -1;
+	}
+
+	vec dir = {
+		.x = look_dir.x >= 0 ? 1 : -1,
+		.y = look_dir.y >= 0 ? 1 : -1,
+		.z = look_dir.z >= 0 ? 1 : -1,
+	};
+
+	vec dir2 = {
+		.x = dir.x/2.f,
+		.y = dir.y/2.f,
+		.z = dir.z/2.f,
+	};
+
+	vec dist_per = {
+		.x = dir.x / look_dir.x, // inverse, but positive
+		.y = dir.y / look_dir.y,
+		.z = dir.z / look_dir.z,
+	};
+
+	vec dist_remaining = {
+		.x = (((dir.x + 1.f) / 2.f) - ((pos.x + 0.5f) - floorf(pos.x  + 0.5f))) / look_dir.x,
+		.y = (((dir.y + 1.f) / 2.f) - ((pos.y + 0.5f) - floorf(pos.y  + 0.5f))) / look_dir.y,
+		.z = (((dir.z + 1.f) / 2.f) - ((pos.z + 0.5f) - floorf(pos.z  + 0.5f))) / look_dir.z,
+	};
+
+	// printf("Look dir: (%.02f, %.02f, %.02f)\n", look_dir.x, look_dir.y, look_dir.z);
+	// printf("Pos: (%.02f, %.02f, %.02f)\n", pos.x, pos.y, pos.z);
+
+	while (1) {
+		// printf("Distance remaining: (%.02f, %.02f, %.02f)\n", dist_remaining.x, dist_remaining.y, dist_remaining.z);
+		// printf("Absolute distance remaining: (%.02f, %.02f, %.02f)\n", dist_remaining.x * look_dir.x, dist_remaining.y * look_dir.y, dist_remaining.z * look_dir.z);
+
+		if (dist_remaining.x < dist_remaining.y && dist_remaining.x < dist_remaining.z) {
+			pos.x += look_dir.x * dist_remaining.x;
+			pos.y += look_dir.y * dist_remaining.x;
+			pos.z += look_dir.z * dist_remaining.x;
+
+			dist_remaining.y -= dist_remaining.x;
+			dist_remaining.z -= dist_remaining.x;
+
+			dist_remaining.x = dist_per.x;
+
+			if (pos.x + dir.x >= 128.f || pos.x + dir.x < 0.f) {
+				return -1;
+			}
+
+			int index = PTI(roundf(pos.x + dir2.x) + 0.5f, roundf(pos.y) + 0.5f, roundf(pos.z) + 0.5f);
+			if (g.voxels[index]) {
+				*hit_pos = (vec){
+					.x = 0.1f + pos.x - dir2.x,
+					.y = 0.1f + roundf(pos.y),
+					.z = 0.1f + roundf(pos.z),
+				};
+				// printf("Hit: (%.02f, %.02f, %.02f)\n", hit_pos->x, hit_pos->y, hit_pos->z);
+				return index;
+			}
+		} else if (dist_remaining.y < dist_remaining.z) {
+			pos.x += look_dir.x * dist_remaining.y;
+			pos.y += look_dir.y * dist_remaining.y;
+			pos.z += look_dir.z * dist_remaining.y;
+
+			dist_remaining.x -= dist_remaining.y;
+			dist_remaining.z -= dist_remaining.y;
+
+			dist_remaining.y = dist_per.y;
+
+			if (pos.y + dir.y >= 128.f || pos.y + dir.y < 0.f) {
+				return -1;
+			}
+
+			int index = PTI(roundf(pos.x) + 0.5f, roundf(pos.y + dir2.y) + 0.5f, roundf(pos.z) + 0.5f);
+			if (g.voxels[index]) {
+				*hit_pos = (vec){
+					.x = 0.1f + roundf(pos.x),
+					.y = 0.1f + pos.y - dir2.y,
+					.z = 0.1f + roundf(pos.z),
+				};
+				// printf("Hit: (%.02f, %.02f, %.02f)\n", hit_pos->x, hit_pos->y, hit_pos->z);
+				return index;
+			}
+		} else {
+			pos.x += look_dir.x * dist_remaining.z;
+			pos.y += look_dir.y * dist_remaining.z;
+			pos.z += look_dir.z * dist_remaining.z;
+
+			dist_remaining.x -= dist_remaining.z;
+			dist_remaining.y -= dist_remaining.z;
+
+			dist_remaining.z = dist_per.z;
+
+			if (pos.z + dir.z > 128.f || pos.z + dir.z < 0.f) {
+				return -1;
+			}
+
+			int index = PTI(roundf(pos.x) + 0.5f, roundf(pos.y) + 0.5f, roundf(pos.z + dir2.z) + 0.5f);
+			if (g.voxels[index]) {
+				*hit_pos = (vec){
+					.x = 0.1f + roundf(pos.x),
+					.y = 0.1f + roundf(pos.y),
+					.z = 0.1f + pos.z - dir2.z,
+				};
+				// printf("Hit: (%.02f, %.02f, %.02f)\n", hit_pos->x, hit_pos->y, hit_pos->z);
+				return index;
+			}
+		}
+	}
+}
+
+void traceViewPath(const uint face)
+{
+    g.pb.w = -1.f; // pre-set as failed
+//    vec rp;
+    lray = ray(&ghp, ipp);
+    //printf("tVP: %u: %f %f %f - %f %f %f\n", lray, ghp.x, ghp.y, ghp.z, ipp.x, ipp.y, ipp.z);
+    if(lray > -1 && face == 1)
+    {
+//        vNorm(&rp);
+//        vec diff = rp;
+//        rp = ghp;
+
+//        vec fd = diff;
+//        fd.x = fabsf(diff.x);
+//        fd.y = fabsf(diff.y);
+//        fd.z = fabsf(diff.z);
+//        if     (fd.x > fd.y && fd.x > fd.z){diff.y = 0.f, diff.z = 0.f;}
+//        else if(fd.y > fd.x && fd.y > fd.z){diff.x = 0.f, diff.z = 0.f;}
+//        else if(fd.z > fd.x && fd.z > fd.y){diff.x = 0.f, diff.y = 0.f;}
+//        diff.x = roundf(diff.x);
+//        diff.y = roundf(diff.y);
+//        diff.z = roundf(diff.z);
+//
+//        rp.x += diff.x;
+//        rp.y += diff.y;
+//        rp.z += diff.z;
+//
+//        if(vSumAbs(diff) == 1.f)
+//        {
+            g.pb = ghp;
+            g.pb.w = 1.f; // success
+//        }
+    }
+}
+
+//*************************************
+// utility functions
+//*************************************
+void timestamp(char* ts){const time_t tt = time(0);strftime(ts, 16, "%H:%M:%S", localtime(&tt));}
+float fTime(){return ((float)SDL_GetTicks())*0.001f;}
+#ifdef __linux__
+    uint64_t microtime()
+    {
+        struct timeval tv;
+        struct timezone tz;
+        memset(&tz, 0, sizeof(struct timezone));
+        gettimeofday(&tv, &tz);
+        return 1000000 * tv.tv_sec + tv.tv_usec;
+    }
+#endif
+void loadColors(const char* file)
+{
+    memset(g.colors, 0, 39*sizeof(uint));
+    g.colors[0] = 16448250;
+    g.colors[1] = 16711680;
+    g.colors[2] = 4194304;
+    g.colors[3] = 65280;
+    g.colors[4] = 16384;
+    g.colors[5] = 255;
+    g.colors[6] = 64;
+    FILE* f = fopen(file, "r");
+    if(f)
+    {
+        uint lino = 0;
+        char line[8];
+        while(fgets(line, 8, f) != NULL)
+        {
+            uint val;
+            if(sscanf(line, "#%x", &val) == 1)
+            {
+                g.colors[7+lino] = val;
+                lino++;
+                if(lino > 31){break;}
+            }
+            else if(sscanf(line, "%x", &val) == 1)
+            {
+                g.colors[7+lino] = val;
+                lino++;
+                if(lino > 31){break;}
+            }
+        }
+        fclose(f);
+        char tmp[16];
+        timestamp(tmp);
+        printf("[%s] Custom color palette applied to project \"%s\".\n", tmp, openTitle);
+    }
+}
+
+//*************************************
+// save and load functions
+//*************************************
+void saveState(const char* name, const char* fne, const uint fs)
+{
+#ifdef __linux__
+    setlocale(LC_NUMERIC, "");
+    const uint64_t st = microtime();
+#endif
+    char file[256];
+    sprintf(file, "%s%s.wox.gz%s", appdir, name, fne);
+    if(fs == 0){sprintf(file, "%s%s.wox.gz%s", appdir, name, fne);}
+    else{sprintf(file, "%s", name);}
+    gzFile f = gzopen(file, "wb9hR");
+    if(f != Z_NULL)
+    {
+        const size_t ws = sizeof(game_state);
+        if(gzwrite(f, &g, ws) != ws)
+        {
+            char tmp[16];
+            timestamp(tmp);
+            printf("[%s] Save corrupted.\n", tmp);
+        }
+        gzclose(f);
+        char tmp[16];
+        timestamp(tmp);
+#ifndef __linux__
+        printf("[%s] Saved %'u voxels.\n", tmp, placedVoxels());
+#else
+        printf("[%s] Saved %'u voxels. (%'lu μs)\n", tmp, placedVoxels(), microtime()-st);
+#endif
+    }
+}
+uint loadState(const char* name, const uint fs)
+{
+#ifdef __linux__
+    setlocale(LC_NUMERIC, "");
+    const uint64_t st = microtime();
+#endif
+    char file[1024];
+    if(fs == 0){sprintf(file, "%s%s.wox.gz", appdir, name);}
+    else{sprintf(file, "%s", name);}
+    gzFile f = gzopen(file, "rb");
+    if(f != Z_NULL)
+    {
+        int gr = gzread(f, &g, sizeof(game_state));
+        gzclose(f);
+        fks = (g.ms == g.cms); // update F-Key State
+        char tmp[16];
+        timestamp(tmp);
+#ifndef __linux__
+        printf("[%s] Loaded %u voxels\n", tmp, placedVoxels());
+#else
+        printf("[%s] Loaded %'u voxels. (%'lu μs)\n", tmp, placedVoxels(), microtime()-st);
+#endif
+        return 1;
+    }
+    return 0;
+}
+
+// voxel face rendering for ply
+void fw_mx(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
+{
+    x -= 64.f, y -= 64.f;
+    const float s = 0.5f;
+    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y-s, z+s, r, g, b);
+    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y+s, z-s, r, g, b);
+    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y-s, z-s, r, g, b);
+    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y-s, z+s, r, g, b);
+    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y+s, z+s, r, g, b);
+    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y+s, z-s, r, g, b);
+}
+void fw_px(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
+{
+    x -= 64.f, y -= 64.f;
+    const float s = 0.5f;
+    fprintf(f, "%g %g %g 1 0 0 %u %u %u\n", x+s, y+s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 1 0 0 %u %u %u\n", x+s, y-s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 1 0 0 %u %u %u\n", x+s, y+s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 1 0 0 %u %u %u\n", x+s, y+s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 1 0 0 %u %u %u\n", x+s, y-s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 1 0 0 %u %u %u\n", x+s, y-s, z-s, r, g, b);
+}
+//
+void fw_my(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
+{
+    x -= 64.f, y -= 64.f;
+    const float s = 0.5f;
+    fprintf(f, "%g %g %g 0 -1 0 %u %u %u\n", x+s, y-s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 -1 0 %u %u %u\n", x-s, y-s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 0 -1 0 %u %u %u\n", x+s, y-s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 0 -1 0 %u %u %u\n", x+s, y-s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 -1 0 %u %u %u\n", x-s, y-s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 -1 0 %u %u %u\n", x-s, y-s, z-s, r, g, b);
+}
+void fw_py(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
+{
+    x -= 64.f, y -= 64.f;
+    const float s = 0.5f;
+    fprintf(f, "%g %g %g 0 1 0 %u %u %u\n", x-s, y+s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 1 0 %u %u %u\n", x+s, y+s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 0 1 0 %u %u %u\n", x-s, y+s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 0 1 0 %u %u %u\n", x-s, y+s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 1 0 %u %u %u\n", x+s, y+s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 1 0 %u %u %u\n", x+s, y+s, z-s, r, g, b);
+}
+//
+void fw_mz(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
+{
+    x -= 64.f, y -= 64.f;
+    const float s = 0.5f;
+    fprintf(f, "%g %g %g 0 0 -1 %u %u %u\n", x+s, y+s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 0 0 -1 %u %u %u\n", x-s, y-s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 0 0 -1 %u %u %u\n", x-s, y+s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 0 0 -1 %u %u %u\n", x+s, y+s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 0 0 -1 %u %u %u\n", x+s, y-s, z-s, r, g, b);
+    fprintf(f, "%g %g %g 0 0 -1 %u %u %u\n", x-s, y-s, z-s, r, g, b);
+}
+void fw_pz(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
+{
+    x -= 64.f, y -= 64.f;
+    const float s = 0.5f;
+    fprintf(f, "%g %g %g 0 0 1 %u %u %u\n", x-s, y+s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 0 1 %u %u %u\n", x+s, y-s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 0 1 %u %u %u\n", x+s, y+s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 0 1 %u %u %u\n", x-s, y+s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 0 1 %u %u %u\n", x-s, y-s, z+s, r, g, b);
+    fprintf(f, "%g %g %g 0 0 1 %u %u %u\n", x+s, y-s, z+s, r, g, b);
+}
+
+//*************************************
+// more utility functions
+//*************************************
+void printAttrib(SDL_GLattr attr, char* name)
+{
+    int i;
+    SDL_GL_GetAttribute(attr, &i);
+    printf("%s: %i\n", name, i);
+}
+SDL_Surface* SDL_RGBA32Surface(Uint32 w, Uint32 h)
+{
+    return SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA32);
+}
+void drawHud(const uint type);
+void doPerspective()
+{
+    glViewport(0, 0, winw, winh);
     SDL_FreeSurface(sHud);
-    SDL_GL_DeleteContext(glc);
-    SDL_DestroyWindow(wnd);
-    SDL_Quit();
-    exit(0);
-}
-void WOX_POP(const int w, const int h)
-{
-    winw = w;
-    winh = h;
-    winw2 = winw/2;
-    winh2 = winh/2;
-    doPerspective();
-}
-void main_loop()
-{
-    // time delta
-    static float lt = 0;
-    t = fTime();
-    const float dt = t-lt;
-    lt = t;
-
-    // fps counter
-    if(focus_mouse == 0)
-    {
-        static uint fc = 0;
-        static float ft = 0.f;
-        if(t > ft)
-        {
-            g_fps = fc/3;
-#ifdef BENCH_FPS
-            static uint count = 0;
-            count++;
-            if(count > 2){exit(0);}
-            printf("%u\n", g_fps);
-#endif
-            fc = 0;
-            ft = t+3.f;
-        }
-        fc++;
-    }
-#ifdef BENCH_FPS
-    return;
-#endif
-
-    // input handling
-    static float idle = 0.f;
-
-    // if user is idle for 3 minutes, save.
-    if(idle != 0.f && t-idle > 180.f)
-    {
-        saveState(openTitle, ".idle", load_state);
-        idle = 0.f; // so we only save once
-        // on input a new idle is set, and a
-        // count-down for a new save begins.
-    }
-
-    // window decor stuff
-    if(drag == 1)
-    {
-        static int lx=0, ly=0;
-        static float lt = 0;
-        if(t > lt)
-        {
-            if(lx != mx || ly != my)
-            {
-                int x,y;
-                SDL_GetWindowPosition(wnd, &x, &y);
-                SDL_SetWindowPosition(wnd, x+(mx-dsx), y+(my-dsy));
-                lx = mx, ly = my;
-            }
-            lt = t+0.03f;
-        }
-    }
-    if(size == 1)
-    {
-        static float lt = 0;
-        if(t > lt)
-        {
-            int w,h;
-            SDL_GetWindowSize(wnd, &w, &h);
-            winw = w+(mx-dsx);
-            winh = h+(my-dsy);
-            dsx = mx;
-            dsy = my;
-            if(winw > 380 && winh > 380)
-            {
-                SDL_SetWindowSize(wnd, winw, winh);
-                winw2 = winw/2;
-                winh2 = winh/2;
-                doPerspective();
-            }
-            lt = t+0.03f;
-        }
-    }
-    
-    SDL_Event event;
-    while(SDL_PollEvent(&event))
-    {
-        switch(event.type)
-        {
-            case SDL_KEYDOWN:
-            {
-                if(event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_TAB)
-                {
-                    focus_mouse = 1 - focus_mouse;
-                    SDL_ShowCursor(1 - focus_mouse);
-                    if(focus_mouse == 1)
-                    {
-                        SDL_GetRelativeMouseState(&xd, &yd);
-                        SDL_SetRelativeMouseMode(SDL_TRUE);
-                    }
-                    else
-                    {
-                        SDL_GetRelativeMouseState(&xd, &yd);
-                        SDL_SetRelativeMouseMode(SDL_FALSE);
-                    }
-                }
-                else if(event.key.keysym.sym == SDLK_F2)
-                {
-                    showhud = 1 - showhud;
-                    if(showhud == 0)
-                    {
-                        shadeVoxel(&projection_id, &view_id, &position_id, &voxel_id);
-                        glUniformMatrix4fv(projection_id, 1, GL_FALSE, (float*)&projection.m[0][0]);
-                    }
-                }
-                if(focus_mouse == 0){break;}
-                if(event.key.keysym.sym == SDLK_w){ks[0] = 1;}
-                else if(event.key.keysym.sym == SDLK_a){ks[1] = 1;}
-                else if(event.key.keysym.sym == SDLK_s){ks[2] = 1;}
-                else if(event.key.keysym.sym == SDLK_d){ks[3] = 1;}
-                else if(event.key.keysym.sym == SDLK_LSHIFT || event.key.keysym.sym == SDLK_LCTRL){ks[4] = 1;} // move down Z
-                else if(event.key.keysym.sym == SDLK_LEFT){ks[5] = 1;}
-                else if(event.key.keysym.sym == SDLK_RIGHT){ks[6] = 1;}
-                else if(event.key.keysym.sym == SDLK_UP){ks[7] = 1;}
-                else if(event.key.keysym.sym == SDLK_DOWN){ks[8] = 1;}
-                else if(event.key.keysym.sym == SDLK_SPACE){ks[9] = 1;} // move up Z
-                else if(event.key.keysym.sym == SDLK_SLASH || event.key.keysym.sym == SDLK_x) // - change selected node
-                {
-                    traceViewPath(0);
-                    if(lray > -1 && g.voxels[lray] > 7)
-                    {
-                        g.voxels[lray]--;
-                        g.st = g.voxels[lray];
-                        if(g.st < 8.f || g.colors[g.voxels[lray]] == 0)
-                        {
-                            if(g.colors[0] != 0)
-                            {
-                                uint i = 7;
-                                for(NULL; i < 40 && g.colors[i] != 0; i++){}
-                                g.st = (float)(i-1);
-                                g.voxels[lray] = i-1;
-                            }
-                        }
-                        updateSelectColor();
-                    }
-                    else
-                    {
-                        g.st -= 1.f;
-                        if(g.st < 8.f || g.colors[(uint)g.st] == 0)
-                        {
-                            if(g.colors[0] != 0)
-                            {
-                                uint i = 7;
-                                for(NULL; i < 40 && g.colors[i] != 0; i++){}
-                                g.st = (float)(i-1);
-                            }
-                        }
-                        updateSelectColor();
-                    }
-                }
-                else if(event.key.keysym.sym == SDLK_QUOTE || event.key.keysym.sym == SDLK_c) // + change selected node
-                {
-                    traceViewPath(0);
-                    if(lray > -1 && g.voxels[lray] > 7)
-                    {
-                        g.voxels[lray]++;
-                        g.st = g.voxels[lray];
-                        if(g.st > 39.f || g.colors[g.voxels[lray]] == 0)
-                        {
-                            g.st = 8.f;
-                            g.voxels[lray] = g.st;
-                        }
-                        updateSelectColor();
-                    }
-                    else
-                    {
-                        g.st += 1.f;
-                        if(g.st > 39.f || g.colors[(uint)g.st] == 0){g.st = 8.f;}
-                        updateSelectColor();
-                    }
-                }
-                else if(event.key.keysym.sym == SDLK_RSHIFT) // place a voxel
-                {
-                    ptt = t+rrsp;
-                    traceViewPath(1);
-                    if(lray > -1)
-                    {
-                        if(g.pb.w == 1 && isInBounds(g.pb) && g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] == 0)
-                        {
-                            g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = g.st;
-                            if(mirror == 1)
-                            {
-                                const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
-                                g.voxels[PTI(x, g.pb.y, g.pb.z)] = g.st;
-                            }
-                        }
-                    }
-                }
-                else if(event.key.keysym.sym == SDLK_RCTRL) // remove pointed voxel
-                {
-                    dtt = t+rrsp;
-                    traceViewPath(0);
-                    if(lray > -1)
-                    {
-                        g.voxels[lray] = 0;
-                        if(mirror == 1)
-                        {
-                            const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
-                            g.voxels[PTI(x, ghp.y, ghp.z)] = 0;
-                        }
-                    }
-                }
-                else if(event.key.keysym.sym == SDLK_q || event.key.keysym.sym == SDLK_z) // clone pointed voxel color
-                {
-                    traceViewPath(0);
-                    //printf("%u\n", lray);
-                    if(lray > -1 && g.voxels[lray] > 7)
-                    {
-                        g.st = g.voxels[lray];
-                        updateSelectColor();
-                    }
-                }
-                else if(event.key.keysym.sym == SDLK_e) // replace pointed voxel
-                {
-                    rtt = t+rrsp;
-                    traceViewPath(0);
-                    if(lray > -1)
-                    {
-                        g.voxels[lray] = g.st;
-                        if(mirror == 1)
-                        {
-                            const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
-                            g.voxels[PTI(x, ghp.y, ghp.z)] = g.st;
-                        }
-                    }
-                }
-                else if(event.key.keysym.sym == SDLK_r) // toggle mirror brush
-                {
-                    mirror = 1 - mirror;
-                }
-                else if(event.key.keysym.sym == SDLK_v) // place voxel at current position
-                {
-                    vec p = g.pp;
-                    vInv(&p);
-                    vec pi = look_dir;
-                    vMulS(&pi, pi, 6.f);
-                    vAdd(&p, p, pi);
-                    const vec rp = (vec){roundf(p.x), roundf(p.y), roundf(p.z)};
-                    if(isInBounds(rp) == 1){g.voxels[PTI(rp.x, rp.y, rp.z)] = 8;}
-                }
-                else if(event.key.keysym.sym == SDLK_f) // toggle movement speeds
-                {
-                    fks = 1 - fks;
-                    if(fks){g.ms = g.cms;}
-                       else{g.ms = g.lms;}
-                }
-                else if(event.key.keysym.sym == SDLK_1)
-                {
-                    g.ms = 9.3f;
-                    if(fks){g.cms=g.ms;}else{g.lms=g.ms;}
-                }
-                else if(event.key.keysym.sym == SDLK_2)
-                {
-                    g.ms = 18.6f;
-                    if(fks){g.cms=g.ms;}else{g.lms=g.ms;}
-                }
-                else if(event.key.keysym.sym == SDLK_3)
-                {
-                    g.ms = 37.2f;
-                    if(fks){g.cms=g.ms;}else{g.lms=g.ms;}
-                }
-                else if(event.key.keysym.sym == SDLK_4)
-                {
-                    g.ms = 74.4f;
-                    if(fks){g.cms=g.ms;}else{g.lms=g.ms;}
-                }
-                else if(event.key.keysym.sym == SDLK_5)
-                {
-                    g.ms = 148.8f;
-                    if(fks){g.cms=g.ms;}else{g.lms=g.ms;}
-                }
-                else if(event.key.keysym.sym == SDLK_6)
-                {
-                    g.ms = 297.6f;
-                    if(fks){g.cms=g.ms;}else{g.lms=g.ms;}
-                }
-                else if(event.key.keysym.sym == SDLK_7)
-                {
-                    g.ms = 595.2f;
-                    if(fks){g.cms=g.ms;}else{g.lms=g.ms;}
-                }
-                else if(event.key.keysym.sym == SDLK_F1)
-                {
-                    SDL_SetWindowSize(wnd, 1024, 768);
-                    WOX_POP(1024, 768);
-                    defaultState(0);
-                    fks = 0;
-                }
-                else if(event.key.keysym.sym == SDLK_F3)
-                {
-                    saveState(openTitle, "", load_state);
-                }
-                else if(event.key.keysym.sym == SDLK_F8)
-                {
-                    loadState(openTitle, 0);
-                }
-                else if(event.key.keysym.sym == SDLK_p)
-                {
-                    g.plock = 1 - g.plock;
-                }
-                idle = t;
-            }
-            break;
-
-            case SDL_KEYUP:
-            {
-                if(focus_mouse == 0){break;}
-                if(event.key.keysym.sym == SDLK_w){ks[0] = 0;}
-                else if(event.key.keysym.sym == SDLK_a){ks[1] = 0;}
-                else if(event.key.keysym.sym == SDLK_s){ks[2] = 0;}
-                else if(event.key.keysym.sym == SDLK_d){ks[3] = 0;}
-                else if(event.key.keysym.sym == SDLK_LSHIFT || event.key.keysym.sym == SDLK_LCTRL){ks[4] = 0;}
-                else if(event.key.keysym.sym == SDLK_LEFT){ks[5] = 0;}
-                else if(event.key.keysym.sym == SDLK_RIGHT){ks[6] = 0;}
-                else if(event.key.keysym.sym == SDLK_UP){ks[7] = 0;}
-                else if(event.key.keysym.sym == SDLK_DOWN){ks[8] = 0;}
-                else if(event.key.keysym.sym == SDLK_SPACE){ks[9] = 0;}
-                else if(event.key.keysym.sym == SDLK_RSHIFT){ptt = 0.f;}
-                else if(event.key.keysym.sym == SDLK_RCTRL){dtt = 0.f;}
-                else if(event.key.keysym.sym == SDLK_e){rtt = 0.f;}
-                idle = t;
-            }
-            break;
-
-            case SDL_MOUSEWHEEL: // change selected node
-            {
-                if(focus_mouse == 0){break;}
-
-                bigc = t+0.5f;
-
-                if(event.wheel.y < 0)
-                {
-                    g.st += 1.f;
-                    if(g.st > 39.f || g.colors[(uint)g.st-1] == 0){g.st = 8.f;}
-                    updateSelectColor();
-                }
-                else if(event.wheel.y > 0)
-                {
-                    g.st -= 1.f;
-                    if(g.st < 8.f || g.colors[(uint)g.st] == 0)
-                    {
-                        if(g.colors[0] != 0)
-                        {
-                            uint i = 7;
-                            for(NULL; i < 39 && g.colors[i] != 0; i++){}
-                            g.st = (float)(i);
-                        }
-                    }
-                    updateSelectColor();
-                }
-                //printf("%.2f %u\n", g.st, g.colors[(uint)g.st]);
-            }
-            break;
-
-            case SDL_MOUSEMOTION:
-            {
-                mx = event.motion.x;
-                my = event.motion.y;
-
-                if(focus_mouse == 0){break;}
-                idle = t;
-            }
-            break;
-
-            case SDL_MOUSEBUTTONUP:
-            {
-                if(event.button.button == SDL_BUTTON_LEFT)
-                {
-                    if(drag == 1 || size == 1)
-                    {
-                        drag=0;
-                        size=0;
-                        SDL_GetWindowSize(wnd, &winw, &winh);
-                        WOX_POP(winw, winh);
-                        SDL_CaptureMouse(SDL_FALSE);
-                    }
-                    ptt = 0.f;
-                }
-                else if(event.button.button == SDL_BUTTON_RIGHT){dtt = 0.f;}
-                else if(event.button.button == SDL_BUTTON_X2){rtt = 0.f;}
-                idle = t;
-            }
-            break;
-
-            case SDL_MOUSEBUTTONDOWN:
-            {
-                mx = event.button.x;
-                my = event.button.y;
-
-                static float llct = 0.f;
-                static uint maxed = 0;
-
-                if(event.button.button == SDL_BUTTON_LEFT) // check window decor stuff
-                {
-                    if(focus_mouse == 0)
-                    {
-                        if(llct != 0.f && t-llct < 0.3f)
-                        {
-                            if(maxed == 0)
-                            {
-                                SDL_MaximizeWindow(wnd);
-                                maxed = 1;
-                                drag = 0;
-                                size = 0;
-                                llct = t;
-                                break;
-                            }
-                            else
-                            {
-                                SDL_RestoreWindow(wnd);
-                                maxed = 0;
-                                drag = 0;
-                                size = 0;
-                                llct = t;
-                                break;
-                            }
-                        }
-                        llct = t;
-                        if(my < 22)
-                        {
-                            if(mx < 14)
-                            {
-                                WOX_QUIT();
-                                break;
-                            }
-                            else if(mx < 28)
-                            {
-                                SDL_MinimizeWindow(wnd);
-                                break;
-                            }
-                            else if(mx > winw-14)
-                            {
-                                WOX_QUIT();
-                                break;
-                            }
-                            else if(mx > winw-28)
-                            {
-                                SDL_MinimizeWindow(wnd);
-                                break;
-                            }
-
-                            dsx = mx, dsy = my;
-                            drag=1;
-                            SDL_CaptureMouse(SDL_TRUE);
-                            break;
-                        }
-                        else if(mx > winw-15 && my > winh-15)
-                        {
-                            size = 1;
-                            dsx = mx, dsy = my;
-                            SDL_CaptureMouse(SDL_TRUE);
-                            break;
-                        }
-                    }
-                }
-                
-                if(focus_mouse == 0) // lock mouse focus on every mouse input to the window
-                {
-                    SDL_ShowCursor(0);
-                    focus_mouse = 1;
-                    SDL_GetRelativeMouseState(&xd, &yd);
-                    SDL_SetRelativeMouseMode(SDL_TRUE);
-                    break;
-                }
-
-                if(event.button.button == SDL_BUTTON_LEFT) // place a voxel
-                {
-                    ptt = t+rrsp;
-                    traceViewPath(1);
-                    //printf("L: %u %f %u\n", lray, g.pb.w, g.voxels[lray]);
-                    if(lray > -1)
-                    {
-                        if(g.pb.w == 1 && isInBounds(g.pb) && g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] == 0)
-                        {
-                            g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = g.st;
-                            if(mirror == 1)
-                            {
-                                const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
-                                g.voxels[PTI(x, g.pb.y, g.pb.z)] = g.st;
-                                //printf("%f %f %f\n", x, g.pb.y, g.pb.z);
-                            }
-                        }
-                    }
-                }
-                else if(event.button.button == SDL_BUTTON_RIGHT) // remove pointed voxel
-                {
-                    dtt = t+rrsp;
-                    traceViewPath(0);
-                    //printf("R: %u %f %u\n", lray, g.pb.w, g.voxels[lray]);
-                    if(lray > -1)
-                    {
-                        g.voxels[lray] = 0;
-                        if(mirror == 1)
-                        {
-                            const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
-                            g.voxels[PTI(x, ghp.y, ghp.z)] = 0;
-                            //printf("%f %f %f\n", x, g.pb.y, g.pb.z);
-                        }
-                    }
-                }
-                else if(event.button.button == SDL_BUTTON_MIDDLE || event.button.button == SDL_BUTTON_X1) // clone pointed voxel
-                {
-                    traceViewPath(0);
-                    if(lray > -1 && g.voxels[lray] > 7)
-                    {
-                        g.st = g.voxels[lray];
-                        updateSelectColor();
-                    }
-                }
-                else if(event.button.button == SDL_BUTTON_X2) // replace pointed node
-                {
-                    rtt = t+rrsp;
-                    traceViewPath(0);
-                    if(lray > -1)
-                    {
-                        g.voxels[lray] = g.st;
-                        if(mirror == 1)
-                        {
-                            const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
-                            g.voxels[PTI(x, ghp.y, ghp.z)] = g.st;
-                        }
-                    }
-                }
-                idle = t;
-            }
-            break;
-
-            case SDL_WINDOWEVENT:
-            {
-                if(event.window.event == SDL_WINDOWEVENT_RESIZED)
-                    WOX_POP(event.window.data1, event.window.data2);
-            }
-            break;
-
-            case SDL_QUIT:
-            {
-                WOX_QUIT();
-            }
-            break;
-        }
-    }
-
-    // on window focus
-    if(focus_mouse == 1)
-    {
-        mGetViewZ(&look_dir, view);
-
-        if(g.plock == 1)
-        {
-            look_dir.z = -0.001f;
-            vNorm(&look_dir);
-        }
-
-        if(ptt != 0.f && t > ptt) // place trigger
-        {
-            traceViewPath(1);
-            if(lray > -1)
-            {
-                if(g.pb.w == 1 && isInBounds(g.pb) && g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] == 0)
-                {
-                    g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = g.st;
-                    if(mirror == 1)
-                    {
-                        const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
-                        g.voxels[PTI(x, g.pb.y, g.pb.z)] = g.st;
-                    }
-                }
-            }
-            ptt = t+0.1;
-        }
-        
-        if(dtt != 0.f && t > dtt) // delete trigger
-        {
-            traceViewPath(0);
-            if(lray > -1)
-            {
-                g.voxels[lray] = 0;
-                if(mirror == 1)
-                {
-                    const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
-                    g.voxels[PTI(x, ghp.y, ghp.z)] = 0;
-                }
-            }
-            dtt = t+0.1f;
-        }
-
-        if(rtt != 0.f && t > rtt) // replace trigger
-        {
-            traceViewPath(0);
-            if(lray > -1)
-            {
-                g.voxels[lray] = g.st;
-                if(mirror == 1)
-                {
-                    const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
-                    g.voxels[PTI(x, ghp.y, ghp.z)] = g.st;
-                }
-            }
-            rtt = t+0.1f;
-        }
-
-        if(ks[0] == 1) // W
-        {
-            vec m;
-            vMulS(&m, look_dir, g.ms * dt);
-            vSub(&g.pp, g.pp, m);
-        }
-        else if(ks[2] == 1) // S
-        {
-            vec m;
-            vMulS(&m, look_dir, g.ms * dt);
-            vAdd(&g.pp, g.pp, m);
-        }
-
-        if(ks[1] == 1) // A
-        {
-            vec vdc;
-            mGetViewX(&vdc, view);
-            vec m;
-            vMulS(&m, vdc, g.ms * dt);
-            vSub(&g.pp, g.pp, m);
-        }
-        else if(ks[3] == 1) // D
-        {
-            vec vdc;
-            mGetViewX(&vdc, view);
-            vec m;
-            vMulS(&m, vdc, g.ms * dt);
-            vAdd(&g.pp, g.pp, m);
-        }
-
-        if(ks[4] == 1) // LSHIFT (down)
-        {
-            vec vdc;
-            if(g.plock == 1)
-                vdc = (vec){0.f,0.f,-1.f};
-            else
-                mGetViewY(&vdc, view);
-            vec m;
-            vMulS(&m, vdc, g.ms * dt);
-            vSub(&g.pp, g.pp, m);
-        }
-        else if(ks[9] == 1) // SPACE (up)
-        {
-            vec vdc;
-            if(g.plock == 1)
-                vdc = (vec){0.f,0.f,-1.f};
-            else
-                mGetViewY(&vdc, view);
-            vec m;
-            vMulS(&m, vdc, g.ms * dt);
-            vAdd(&g.pp, g.pp, m);
-        }
-
-        if(ks[5] == 1) // LEFT
-            g.xrot += 0.7f*dt;
-        else if(ks[6] == 1) // RIGHT
-            g.xrot -= 0.7f*dt;
-
-        if(ks[7] == 1) // UP
-            g.yrot += 0.7f*dt;
-        else if(ks[8] == 1) // DOWN
-            g.yrot -= 0.7f*dt;
-
-        // camera/mouse control
-        SDL_GetRelativeMouseState(&xd, &yd);
-        if(xd != 0 || yd != 0)
-        {
-            g.xrot -= xd*g.sens;
-            g.yrot -= yd*g.sens;
-
-            if(g.plock == 1)
-            {
-                if(g.yrot > 3.11f)
-                    g.yrot = 3.11f;
-                if(g.yrot < 0.03f)
-                    g.yrot = 0.03f;
-            }
-            else
-            {
-                if(g.yrot > 3.14f)
-                    g.yrot = 3.14f;
-                if(g.yrot < 0.1f)
-                    g.yrot = 0.1f;
-            }
-        }
-    }
-
-    mIdent(&view);
-    mRotate(&view, g.yrot, 1.f, 0.f, 0.f);
-    mRotate(&view, g.xrot, 0.f, 0.f, 1.f);
-    mTranslate(&view, g.pp.x, g.pp.y, g.pp.z);
-
-    mGetViewZ(&look_dir, view); // refresh
-
-//*************************************
-// begin render
-//*************************************
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-//*************************************
-// main render
-//*************************************
-
-    // voxels
-    if(showhud == 1)
-    {
-        shadeVoxel(&projection_id, &view_id, &position_id, &voxel_id);
-        glUniformMatrix4fv(projection_id, 1, GL_FALSE, (float*)&projection.m[0][0]);
-    }
-    glBindBuffer(GL_ARRAY_BUFFER, mdlVoxel.vid);
-    glVertexAttribPointer(position_id, 3, GL_FLOAT, GL_FALSE, 0, 0);
-    glEnableVertexAttribArray(position_id);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mdlVoxel.iid);
-
-    // render voxels
-    ipp = g.pp; // inverse player position (setting global 'ipp' here is perfect)
-    vInv(&ipp); // <--
-    glUniformMatrix4fv(view_id, 1, GL_FALSE, (float*)&view.m[0][0]);
-
-    // for(uint i = 0; i < max_voxels; i++)
-    // {
-    //     if(g.voxels[i] == 0){continue;}
-    //     if(g.colors[g.voxels[i]-1] != 0)
-    //     {
-    //         const float fi = (float)i;
-    //         glUniform2f(voxel_id, fi, g.colors[g.voxels[i]-1]);
-    //         glDrawElements(GL_TRIANGLES, voxel_numind, GL_UNSIGNED_BYTE, 0);
-    //     }
-    // }
-
-    for(uchar z = 0; z < 128; z++)
-    {
-        for(uchar y = 0; y < 128; y++)
-        {
-            for(uchar x = 0; x < 128; x++)
-            {
-                if(insideFrustum(x,y,z) == 0){continue;}
-                if( x <=   0 || y <=   0 || z <=   0 ||
-                    x >= 127 || y >= 127 || z >= 127 ||
-                    g.voxels[PTIB(x-1, y, z)] == 0 || // check if generally occluded (not by lookdir)
-                    g.voxels[PTIB(x+1, y, z)] == 0 ||
-                    g.voxels[PTIB(x, y-1, z)] == 0 ||
-                    g.voxels[PTIB(x, y+1, z)] == 0 ||
-                    g.voxels[PTIB(x, y, z-1)] == 0 ||
-                    g.voxels[PTIB(x, y, z+1)] == 0 )
-                {
-                    const uint i = PTI(x,y,z);
-                    if(g.voxels[i] == 0){continue;}
-                    uint rc = g.colors[g.voxels[i]-1];
-                    if(rc == 0){rc=16745211;}
-                    const float fi = (float)i;
-                    glUniform2f(voxel_id, fi, rc);
-                    glDrawElements(GL_TRIANGLES, voxel_numind, GL_UNSIGNED_BYTE, 0);
-                }
-            }
-        }
-    }
-
-    // canvas frame
-    if(showhud == 1)
-    {
-        glUniform2f(voxel_id, 0.f, 65535.f);
-        esRebind(GL_ARRAY_BUFFER, &mdlVoxel.vid, &(GLfloat[]){
-                                                                127.5f, 127.5f, 127.5f,
-                                                                -0.5f, 127.5f, 127.5f,
-                                                                -0.5f, 127.5f, -0.5f,
-                                                                127.5f, 127.5f, -0.5f,
-                                                                127.5f, -0.5f, 127.5f, //
-                                                                -0.5f, -0.5f, 127.5f,
-                                                                -0.5f, -0.5f, -0.5f,
-                                                                127.5f, -0.5f, -0.5f,
-                                                            }
-                                                            , 8 * 3 * sizeof(float), GL_STATIC_DRAW);
-        esRebind(GL_ELEMENT_ARRAY_BUFFER, &mdlVoxel.iid, &(GLbyte[]){0,1,2,3,0,4,5,6,7,4,5,1,2,6,7,3}, 16, GL_STATIC_DRAW);
-        glDrawElements(GL_LINE_STRIP, 16, GL_UNSIGNED_BYTE, 0);
-        esRebind(GL_ARRAY_BUFFER,         &mdlVoxel.vid, voxel_vertices, sizeof(voxel_vertices), GL_STATIC_DRAW);
-        esRebind(GL_ELEMENT_ARRAY_BUFFER, &mdlVoxel.iid, voxel_indices,  sizeof(voxel_indices),  GL_STATIC_DRAW);
-
-        // hud
-        drawHud(focus_mouse);
-        shadeHud(&position_id, &texcoord_id, &sampler_id);
-        glUniformMatrix4fv(projection_id, 1, GL_FALSE, (float*)&projection.m[0][0]);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, hudmap);
-        glUniform1i(sampler_id, 0);
-        glBindBuffer(GL_ARRAY_BUFFER, mdlPlane.vid);
-        glVertexAttribPointer(position_id, 3, GL_FLOAT, GL_FALSE, 0, 0);
-        glEnableVertexAttribArray(position_id);
-        glBindBuffer(GL_ARRAY_BUFFER, mdlPlane.tid);
-        glVertexAttribPointer(texcoord_id, 2, GL_FLOAT, GL_FALSE, 0, 0);
-        glEnableVertexAttribArray(texcoord_id);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mdlPlane.iid);
-        glDisable(GL_DEPTH_TEST);
-        glEnable(GL_BLEND);
-            glDrawElements(GL_TRIANGLES, hud_numind, GL_UNSIGNED_BYTE, 0);
-        glDisable(GL_BLEND);
-        glEnable(GL_DEPTH_TEST);
-    }
-
-//*************************************
-// swap buffers / display render
-//*************************************
-    SDL_GL_SwapWindow(wnd);
-}
-void drawHud(const uint type)
-{
-    // clear cpu hud before rendering to it
-    SDL_FillRect(sHud, &sHud->clip_rect, 0x00000000);
-    if(type == 0)
-    {
-        // window title
-        SDL_FillRect(sHud, &(SDL_Rect){0, 0, winw, 19}, 0x11FFFFFF);
-        const uint len = lenText("Woxel.xyz"); 
-        drawText(sHud, "Woxel.xyz", winw2-25, 4, 3);
-        drawText(sHud, "X -", 4, 4, 3);
-        drawText(sHud, "- X", winw-22, 4, 3);
-        SDL_FillRect(sHud, &(SDL_Rect){winw-15, winh-15, 15, 15}, 0x11FFFFFF);
-        drawText(sHud, "r", winw-9, winh-13, 3);
-
-        // fps
-        char tmp[16];
-        sprintf(tmp, "%u", g_fps);
-        SDL_FillRect(sHud, &(SDL_Rect){0, 22, lenText(tmp)+8, 19}, 0xCC000000);
-        drawText(sHud, tmp, 4, 26, 2);
-        // center hud
-        const int left = winw2-177;
-        int top = winh2-152;
-        SDL_FillRect(sHud, &(SDL_Rect){winw2-193, top-3, 382, 303}, 0x33FFFFFF);
-        SDL_FillRect(sHud, &(SDL_Rect){winw2-190, top, 376, 297}, 0xCC000000);
-        int a = drawText(sHud, "Woxel", winw2-15, top+11, 3);
-        a = drawText(sHud, appVersion, left+330, top+11, 4);
-        a = drawText(sHud, "woxels.github.io", left, top+11, 4);
-
-        top += 33;
-        a = drawText(sHud, "WASD ", left, top, 2);
-        drawText(sHud, "Move around based on relative orientation to X and Y.", a, top, 1);
-        
-        top += 11;
-        a = drawText(sHud, "SPACE", left, top, 2);
-        a = drawText(sHud, " + ", a, top, 4);
-        a = drawText(sHud, "L-SHIFT ", a, top, 2);
-        drawText(sHud, "Move up and down relative Z.", a, top, 1);
-
-        top += 11;
-        a = drawText(sHud, "F ", left, top, 2);
-        drawText(sHud, "Toggle player fast speed on and off.", a, top, 1);
-        
-        top += 11;
-        a = drawText(sHud, "1", left, top, 2);
-        a = drawText(sHud, "-", a, top, 4);
-        a = drawText(sHud, "7 ", a, top, 2);
-        drawText(sHud, "Change move speed for selected fast state.", a, top, 1);
-
-        top += 11;
-        a = drawText(sHud, "P ", left, top, 2);
-        drawText(sHud, "Toggle pitch lock.", a, top, 1);
-
-        top += 22;
-        a = drawText(sHud, "Left Click ", left, top, 2);
-        a = drawText(sHud, "Place node.", a, top, 1);
-        a = drawText(sHud, " Right Click ", a, top, 2);
-        drawText(sHud, "Delete node.", a, top, 1);
-
-        top += 11;
-        a = drawText(sHud, "Q ", left, top, 2);
-        a = drawText(sHud, "Clone color of pointed node.", a, top, 1);
-        a = drawText(sHud, " E ", a, top, 2);
-        drawText(sHud, "Replace color of pointed node.", a, top, 1);
-
-        top += 11;
-        a = drawText(sHud, "R ", left, top, 2);
-        a = drawText(sHud, "Toggle mirror brush.", a, top, 1);
-        a = drawText(sHud, " V ", a, top, 2);
-        drawText(sHud, "Place node at current location.", a, top, 1);
-
-        top += 11;
-        a = drawText(sHud, "Middle Scroll ", left, top, 2);
-        drawText(sHud, "Change selected color.", a, top, 1);
-
-        top += 11;
-        a = drawText(sHud, "X", left, top, 2);
-        a = drawText(sHud, " + ", a, top, 4);
-        a = drawText(sHud, "C ", a, top, 2);
-        drawText(sHud, "Scroll color of pointed node.", a, top, 1);
-
-        top += 22;
-        a = drawText(sHud, "F1 ", left, top, 2);
-        drawText(sHud, "Resets environment state back to default.", a, top, 1);
-
-        top += 11;
-        a = drawText(sHud, "F2 ", left, top, 2);
-        drawText(sHud, "Toggles visibility of the HUD.", a, top, 1);
-
-        top += 11;
-        a = drawText(sHud, "F3 ", left, top, 2);
-        drawText(sHud, "Save. Will auto save on exit. Backup made if idle for 3 mins.", a, top, 1);
-
-        top += 11;
-        a = drawText(sHud, "F8 ", left, top, 2);
-        drawText(sHud, "Load. Will erase what you have done since the last save.", a, top, 1);
-
-        top += 22;
-        drawText(sHud, "Check the console output for more information.", left, top, 3);
-    
-        for(uint i = 0; i < 16; i++)
-        {
-            const uint left2 = left+(i*22);
-            {
-                uint tu = g.colors[7+i];
-                if(tu != 0)
-                {
-                    uchar r = (tu & 0x00FF0000) >> 16;
-                    uchar gc = (tu & 0x0000FF00) >> 8;
-                    uchar b = (tu & 0x000000FF);
-                    SDL_FillRect(sHud, &(SDL_Rect){left2, top+21, 20, 20}, 0xFFFFFFFF);
-                    const Uint32 tclr = SDL_MapRGB(sHud->format, r,gc,b);
-                    SDL_FillRect(sHud, &(SDL_Rect){left2+1, top+22, 18, 18}, tclr);
-                    if(mx > left2 && mx < left2+20 && my > top+21 && my < top+42)
-                    {
-                        char tmp[16];
-                        sprintf(tmp, "%02X%02X%02X", r, gc, b);
-                        const int len = lenText(tmp);
-                        const int len2 = len/2;
-                        SDL_FillRect(sHud, &(SDL_Rect){mx-len2-4, top-4, len+9, 19}, tclr);
-                        SDL_FillRect(sHud, &(SDL_Rect){mx-len2-1, top-1, len+3, 13}, 0xFF00BFFF);
-                        SDL_FillRect(sHud, &(SDL_Rect){mx-len2, top, len+1, 11}, 0xFF000000);
-                        drawText(sHud, tmp, mx-len2+1, top, 3);
-                    }
-                }
-            }
-            {
-                uint tu = g.colors[23+i];
-                if(tu != 0)
-                {
-                    uchar r = (tu & 0x00FF0000) >> 16;
-                    uchar gc = (tu & 0x0000FF00) >> 8;
-                    uchar b = (tu & 0x000000FF);
-                    SDL_FillRect(sHud, &(SDL_Rect){left2, top+43, 20, 20}, 0xFFFFFFFF);
-                    const Uint32 tclr = SDL_MapRGB(sHud->format, r,gc,b);
-                    SDL_FillRect(sHud, &(SDL_Rect){left2+1, top+44, 18, 18}, tclr);
-                    if(mx > left2 && mx < left2+20 && my > top+43 && my < top+63)
-                    {
-                        char tmp[16];
-                        sprintf(tmp, "%02X%02X%02X", r, gc, b);
-                        const int len = lenText(tmp);
-                        const int len2 = len/2;
-                        SDL_FillRect(sHud, &(SDL_Rect){mx-len2-4, top-4, len+9, 19}, tclr);
-                        SDL_FillRect(sHud, &(SDL_Rect){mx-len2-1, top-1, len+3, 13}, 0xFF00BFFF);
-                        SDL_FillRect(sHud, &(SDL_Rect){mx-len2, top, len+1, 11}, 0xFF000000);
-                        drawText(sHud, tmp, mx-len2+1, top, 3);
-                    }
-                }
-            }
-        }
-    }
-    else
-    {
-        if(t < bigc)
-        {
-            SDL_FillRect(sHud, &(SDL_Rect){winw2-3, winh2-3, 6, 6}, sclr);
-        }
-        else
-        {
-            setpixel(sHud, winw2, winh2, sclr);
-            //
-            setpixel(sHud, winw2+1, winh2, sclr);
-            setpixel(sHud, winw2-1, winh2, sclr);
-            setpixel(sHud, winw2, winh2+1, sclr);
-            setpixel(sHud, winw2, winh2-1, sclr);
-            //
-            setpixel(sHud, winw2+2, winh2, sclr);
-            setpixel(sHud, winw2-2, winh2, sclr);
-            setpixel(sHud, winw2, winh2+2, sclr);
-            setpixel(sHud, winw2, winh2-2, sclr);
-            //
-            setpixel(sHud, winw2+3, winh2, sclr);
-            setpixel(sHud, winw2-3, winh2, sclr);
-            setpixel(sHud, winw2, winh2+3, sclr);
-            setpixel(sHud, winw2, winh2-3, sclr);
-            // now the part to prevent invisible crosshair
-            setpixel(sHud, winw2+1, winh2+1, 0xCC000000);
-            setpixel(sHud, winw2-1, winh2-1, 0xCC000000);
-            setpixel(sHud, winw2-1, winh2+1, 0xCC000000);
-            setpixel(sHud, winw2+1, winh2-1, 0xCC000000);
-            //
-            setpixel(sHud, winw2+2, winh2+1, 0xCC000000);
-            setpixel(sHud, winw2-2, winh2-1, 0xCC000000);
-            setpixel(sHud, winw2-1, winh2+2, 0xCC000000);
-            setpixel(sHud, winw2+1, winh2-2, 0xCC000000);
-            //
-            setpixel(sHud, winw2+3, winh2+1, 0xCC000000);
-            setpixel(sHud, winw2-3, winh2-1, 0xCC000000);
-            setpixel(sHud, winw2-1, winh2+3, 0xCC000000);
-            setpixel(sHud, winw2+1, winh2-3, 0xCC000000);
-
-            if(g.plock == 1)
-            {
-                setpixel(sHud, winw2+4, winh2, sclr);
-                setpixel(sHud, winw2-4, winh2, sclr);
-                setpixel(sHud, winw2+5, winh2, sclr);
-                setpixel(sHud, winw2-5, winh2, sclr);
-            }
-
-            if(mirror == 1)
-            {
-                setpixel(sHud, winw2+2, winh2+2, sclr);
-                setpixel(sHud, winw2-2, winh2-2, sclr);
-                //
-                setpixel(sHud, winw2+3, winh2+2, sclr);
-                setpixel(sHud, winw2-3, winh2-2, sclr);
-                setpixel(sHud, winw2+2, winh2+3, sclr);
-                setpixel(sHud, winw2-2, winh2-3, sclr);
-                //
-                setpixel(sHud, winw2+4, winh2+2, sclr);
-                setpixel(sHud, winw2-4, winh2-2, sclr);
-                setpixel(sHud, winw2+2, winh2+4, sclr);
-                setpixel(sHud, winw2-2, winh2-4, sclr);
-                //
-                setpixel(sHud, winw2+5, winh2+2, sclr);
-                setpixel(sHud, winw2-5, winh2-2, sclr);
-                setpixel(sHud, winw2+2, winh2+5, sclr);
-                setpixel(sHud, winw2-2, winh2-5, sclr);
-                // now the part to prevent invisible crosshair
-                setpixel(sHud, winw2+3, winh2+3, 0xCC000000);
-                setpixel(sHud, winw2+3, winh2+4, 0xCC000000);
-                setpixel(sHud, winw2+3, winh2+5, 0xCC000000);
-                setpixel(sHud, winw2+4, winh2+3, 0xCC000000);
-                setpixel(sHud, winw2+5, winh2+3, 0xCC000000);
-                setpixel(sHud, winw2-3, winh2-3, 0xCC000000);
-                setpixel(sHud, winw2-3, winh2-4, 0xCC000000);
-                setpixel(sHud, winw2-3, winh2-5, 0xCC000000);
-                setpixel(sHud, winw2-4, winh2-3, 0xCC000000);
-                setpixel(sHud, winw2-5, winh2-3, 0xCC000000);
-            }
-        }
-
-        const int hso = winw2-175;
-        for(uint i = 0; i < 16; i++)
-        {
-            const uint left = hso+(i*22);
-            {
-                uint tu = g.colors[7+i];
-                if(tu != 0)
-                {
-                    uchar r = (tu & 0x00FF0000) >> 16;
-                    uchar gc = (tu & 0x0000FF00) >> 8;
-                    uchar b = (tu & 0x000000FF);
-                    if(g.st-1 == 7+i)
-                        SDL_FillRect(sHud, &(SDL_Rect){left, 11, 20, 20}, 0xFFFFFFFF);
-                    else
-                        SDL_FillRect(sHud, &(SDL_Rect){left, 11, 20, 20}, 0xFF000000);
-                    SDL_FillRect(sHud, &(SDL_Rect){left+1, 12, 18, 18}, SDL_MapRGB(sHud->format, r,gc,b));
-                }
-            }
-            {
-                uint tu = g.colors[23+i];
-                if(tu != 0)
-                {
-                    uchar r = (tu & 0x00FF0000) >> 16;
-                    uchar gc = (tu & 0x0000FF00) >> 8;
-                    uchar b = (tu & 0x000000FF);
-                    if(g.st-1 == 23+i)
-                        SDL_FillRect(sHud, &(SDL_Rect){left, 33, 20, 20}, 0xFFFFFFFF);
-                    else
-                        SDL_FillRect(sHud, &(SDL_Rect){left, 33, 20, 20}, 0xFF000000);
-                    SDL_FillRect(sHud, &(SDL_Rect){left+1, 34, 18, 18}, SDL_MapRGB(sHud->format, r,gc,b));
-                }
-            }
-        }
-    }
-
-    // flip the new hud to gpu
-    flipHud();
-}
-
-//*************************************
-// Process Entry Point
-//*************************************
-int main(int argc, char** argv)
-{
-//*************************************
-// init stuff
-//*************************************
-    printf("██╗    ██╗ ██████╗ ██╗  ██╗███████╗██╗     \n");
-    printf("██║    ██║██╔═══██╗╚██╗██╔╝██╔════╝██║     \n");
-    printf("██║ █╗ ██║██║   ██║ ╚███╔╝ █████╗  ██║     \n");
-    printf("██║███╗██║██║   ██║ ██╔██╗ ██╔══╝  ██║     \n");
-    printf("╚███╔███╔╝╚██████╔╝██╔╝ ██╗███████╗███████╗\n");
-    printf(" ╚══╝╚══╝  ╚═════╝ ╚═╝  ╚═╝╚══════╝╚══════╝\n");
-    printf("\nMouse locks when you click on the window, press ESCAPE/TAB to unlock the mouse.\n\n");
-    printf("Input Mapping:\n");
-    printf("W,A,S,D = Move around based on relative orientation to X and Y.\n");
-    printf("SPACE + L-SHIFT = Move up and down relative Z.\n");
-    printf("Left Click / R-SHIFT = Place node.\n");
-    printf("Right Click / R-CTRL = Delete node.\n");
-    printf("V = Places voxel at current position.\n");
-    printf("Q / Z / Middle Click / Mouse4 = Clone color of pointed node.\n");
-    printf("E / Mouse5 = Replace color of pointed node.\n");
-    printf("F = Toggle player fast speed on and off.\n");
-    printf("1-7 = Change move speed for selected fast state.\n");
-    printf("X + C / Slash + Quote = Scroll color of pointed node.\n");
-    printf("R = Toggle mirror brush.\n");
-    printf("P = Toggle pitch lock.\n");
-    printf("F1 = Resets environment state back to default.\n");
-    printf("F2 = Toggle HUD visibility.\n");
-    printf("F3 = Save. (auto saves on exit, backup made if idle for 3 mins.)\n");
-    printf("F8 = Load. (will erase what you have done since the last save)\n");
-    printf("\n* Arrow Keys can be used to move the view around.\n");
-    printf("* Your state is automatically saved on exit.\n");
-    printf("\nConsole Arguments:\n");
-    printf("./wox <project_name> <mouse_sensitivity> <color_palette_file_path>\n");
-    printf("e.g; ./wox Untitled 0.003 /tmp/colors.txt\n");
-    printf("1st, \"Untitled\", Name of project to open or create.\n");
-    printf("2nd, \"0.003\", Mouse sensitivity.\n");
-    printf("3rd, \"/tmp/colors.txt\", path to a color palette file, the file must contain a hex\n");
-    printf("color on each new line, 32 colors maximum. e.g; \"#00FFFF\".\n\n");
-    printf("To load from file: ./wox loadgz <file_path>\n");
-    printf("e.g; ./wox loadgz /home/user/file.wox.gz\n\n");
-    printf("To export: ./wox export <project_name> <option: wox,txt,vv,ply> <export_path>\n");
-    printf("e.g; ./wox export txt /home/user/file.txt\n");
-    printf("When exporting as ply you will want to merge vertices by distance in Blender\nor `Cleaning and Repairing > Merge Close Vertices` in MeshLab.\n\n");
-    printf("Find more color palettes at; https://lospec.com/palette-list\n");
-    printf("You can use any palette upto 32 colors. But don't use #000000 (Black)\nin your color palette as it will terminate at that color.\n\n");
-    printf("Default 32 Color Palette: https://lospec.com/palette-list/resurrect-32\n");
-    printf("\n----\n");
-
-    // seed random
-    srand(time(0));
-    srandf(time(0));
-
-    // get paths
-    basedir = SDL_GetBasePath();
-    appdir = SDL_GetPrefPath("voxdsp", "woxel");
-
-    // argv
-    char export_path[1024] = {0};
-    uint export_type = 0;
-    if(argc >= 2 && strlen(argv[1]) < 256)
-    {
-        sprintf(openTitle, "%s", argv[1]);
-    }
-    if(argc >= 3 && strcmp(argv[1], "loadgz") == 0 && strlen(argv[2]) < 256)
-    {
-        sprintf(openTitle, "%s", argv[2]);
-        load_state = 1;
-    }
-    if(argc >= 5 && strcmp(argv[1], "export") == 0 && strlen(argv[2]) < 256 && strlen(argv[4]) < 1024)
-    {
-        sprintf(openTitle, "%s", argv[2]);
-
-        if     (strcmp(argv[3], "txt") == 0){export_type=1;}
-        else if(strcmp(argv[3], "vv") == 0){export_type=2;}
-        else if(strcmp(argv[3], "ply") == 0){export_type=3;}
-
-        sprintf(export_path, "%s", argv[4]);
-    }
-
-    // default state
-    if(loadState(openTitle, load_state) == 0)
-    {
-        defaultState(0);
-        memset(&g.voxels, 0, max_voxels);
-        //
-        g.voxels[PTI(64,64,64)] = 1; // center
-        g.voxels[PTI(64,64,0)] = 7;
-        g.voxels[PTI(0,64,64)] = 3;
-        g.voxels[PTI(64,0,64)] = 5;
-        g.voxels[PTI(64,64,127)] = 6;
-        g.voxels[PTI(127,64,64)] = 2;
-        g.voxels[PTI(64,127,64)] = 4;
-        //
-        g.voxels[PTI(0,0,0)] = 1;
-        g.voxels[PTI(127,127,127)] = 1;
-        g.voxels[PTI(0,127,127)] = 1;
-        g.voxels[PTI(127,127,0)] = 1;
-        g.voxels[PTI(127,0,0)] = 1;
-        g.voxels[PTI(0,0,127)] = 1;
-        g.voxels[PTI(127,0,127)] = 1;
-        g.voxels[PTI(0,127,0)] = 1;
-        //
-        // system palette
-        g.colors[0] = 16448250;
-        g.colors[1] = 16711680;
-        g.colors[2] = 4194304;
-        g.colors[3] = 65280;
-        g.colors[4] = 16384;
-        g.colors[5] = 255;
-        g.colors[6] = 64;
-        // user palette
-        g.colors[7] = 16777215;
-        g.colors[8] = 16476957;
-        g.colors[9] = 15219515;
-        g.colors[10] = 8592477;
-        g.colors[11] = 12788820;
-        g.colors[12] = 15748984;
-        g.colors[13] = 16155009;
-        g.colors[14] = 16557968;
-        g.colors[15] = 14928022;
-        g.colors[16] = 11244666;
-        g.colors[17] = 9858156;
-        g.colors[18] = 6444389;
-        g.colors[19] = 4076870;
-        g.colors[20] = 745061;
-        g.colors[21] = 756367;
-        g.colors[22] = 2014323;
-        g.colors[23] = 9558889;
-        g.colors[24] = 16514950;
-        g.colors[25] = 16496980;
-        g.colors[26] = 13461565;
-        g.colors[27] = 10372409;
-        g.colors[28] = 8007749;
-        g.colors[29] = 7028341;
-        g.colors[30] = 9461417;
-        g.colors[31] = 11044083;
-        g.colors[32] = 15379949;
-        g.colors[33] = 9425919;
-        g.colors[34] = 5086182;
-        g.colors[35] = 5072308;
-        g.colors[36] = 4737655;
-        g.colors[37] = 3203513;
-        g.colors[38] = 9435362;
-        //
-        char tmp[16];
-        timestamp(tmp);
-        printf("[%s] New volumetric canvas created.\n", tmp);
-        if(load_state == 0)
-            printf("[%s] Created: %s%s.wox.gz\n", tmp, appdir, openTitle);
-        else
-            printf("[%s] Created: %s\n", tmp, openTitle);
-    }
-    else
-    {
-        char tmp[16];
-        timestamp(tmp);
-        if(load_state == 0)
-            printf("[%s] Opened: %s%s.wox.gz\n", tmp, appdir, openTitle);
-        else
-            printf("[%s] Opened: %s\n", tmp, openTitle);
-    }
-    
-    //memset(&g.voxels, 8, max_voxels);
-
-    // if this is just an export job then export and quit.
-    if(export_path[0] != 0x00)
-    {
-        if(export_type == 0){saveState(export_path, "", 1);}
-        if(export_type == 1)
-        {
-            FILE* f = fopen(export_path, "w");
-            if(f != NULL)
-            {
-                fprintf(f, "# %s %s\n", appTitle, appVersion);
-                fprintf(f, "# X Y Z RRGGBB\n");
-                for(uchar z = 0; z < 128; z++)
-                {
-                    for(uchar y = 0; y < 128; y++)
-                    {
-                        for(uchar x = 0; x < 128; x++)
-                        {
-                            const uint i = PTI(x,y,z);
-                            if(g.voxels[i] < 8){continue;}
-                            const uint tu = g.colors[g.voxels[i]-1];
-                            uchar r = (tu & 0x00FF0000) >> 16;
-                            uchar gc = (tu & 0x0000FF00) >> 8;
-                            uchar b = (tu & 0x000000FF);
-                            if(r != 0 || gc != 0 || b != 0)
-                                fprintf(f, "%i %i %i %02X%02X%02X\n", ((int)x)-64, ((int)y)-64, z, r, gc, b);
-                        }
-                    }
-                }
-                fclose(f);
-                char tmp[16];
-                timestamp(tmp);
-                printf("[%s] Exported TXT: %s\n", tmp, export_path);
-            }
-        }
-        if(export_type == 2)
-        {
-            FILE* f = fopen(export_path, "w");
-            if(f != NULL)
-            {
-                fprintf(f, "# %s %s - Visible Voxels only\n", appTitle, appVersion);
-                fprintf(f, "# X Y Z RRGGBB\n");
-                for(uchar z = 0; z < 128; z++)
-                {
-                    for(uchar y = 0; y < 128; y++)
-                    {
-                        for(uchar x = 0; x < 128; x++)
-                        {
-                            const uint i = PTI(x,y,z);
-                            if(g.voxels[i] < 8){continue;}
-                            const uint tu = g.colors[g.voxels[i]-1];
-                            uchar r = (tu & 0x00FF0000) >> 16;
-                            uchar gc = (tu & 0x0000FF00) >> 8;
-                            uchar b = (tu & 0x000000FF);
-                            if(r != 0 || gc != 0 || b != 0)
-                            {
-                                if( x <=   0 || y <=   0 || z <=   0 ||
-                                    x >= 127 || y >= 127 || z >= 127 ||
-                                    g.voxels[PTIB(x-1, y, z)] == 0 ||
-                                    g.voxels[PTIB(x+1, y, z)] == 0 ||
-                                    g.voxels[PTIB(x, y-1, z)] == 0 ||
-                                    g.voxels[PTIB(x, y+1, z)] == 0 ||
-                                    g.voxels[PTIB(x, y, z-1)] == 0 ||
-                                    g.voxels[PTIB(x, y, z+1)] == 0 )
-                                {
-                                    fprintf(f, "%i %i %i %02X%02X%02X\n", ((int)x)-64, ((int)y)-64, z, r, gc, b);
-                                }
-                            }
-                        }
-                    }
-                }
-                fclose(f);
-                char tmp[16];
-                timestamp(tmp);
-                printf("[%s] Exported VV: %s\n", tmp, export_path);
-            }
-        }
-        if(export_type == 3)
-        {
-            FILE* f = fopen(export_path, "w");
-            if(f != NULL)
-            {
-                // I should be doing this in the single loop writing to memory so
-                // that I can append the header later for writing to file.
-                uint vc = 0;
-                for(uchar z = 0; z < 128; z++){
-                    for(uchar y = 0; y < 128; y++){
-                        for(uchar x = 0; x < 128; x++){
-                            const uint i = PTI(x,y,z);
-                            if(g.voxels[i] < 8){continue;}
-                            const uint tu = g.colors[g.voxels[i]-1];
-                            uchar cr = (tu & 0x00FF0000) >> 16;
-                            uchar cg = (tu & 0x0000FF00) >> 8;
-                            uchar cb = (tu & 0x000000FF);
-                            if(cr != 0 || cg != 0 || cb != 0)
-                            {
-                                int r = PTIB2(x-1, y, z);
-                                if(r < 0 || g.voxels[r] == 0){vc+=6;}
-                                r = PTIB2(x+1, y, z);
-                                if(r < 0 || g.voxels[r] == 0){vc+=6;}
-                                r = PTIB2(x, y-1, z);
-                                if(r < 0 || g.voxels[r] == 0){vc+=6;}
-                                r = PTIB2(x, y+1, z);
-                                if(r < 0 || g.voxels[r] == 0){vc+=6;}
-                                r = PTIB2(x, y, z-1);
-                                if(r < 0 || g.voxels[r] == 0){vc+=6;}
-                                r = PTIB2(x, y, z+1);
-                                if(r < 0 || g.voxels[r] == 0){vc+=6;}
-                }}}}
-                // but it's unlikely to ever be that expensive that anyone would notice this inefficiency
-                fprintf(f, "ply\n");
-                fprintf(f, "format ascii 1.0\n");
-                fprintf(f, "comment Created by %s %s - woxels.github.io\n", appTitle, appVersion);
-                fprintf(f, "element vertex %u\n", vc);
-                fprintf(f, "property float x\n");
-                fprintf(f, "property float y\n");
-                fprintf(f, "property float z\n");
-                fprintf(f, "property float nx\n");
-                fprintf(f, "property float ny\n");
-                fprintf(f, "property float nz\n");
-                fprintf(f, "property uchar red\n");
-                fprintf(f, "property uchar green\n");
-                fprintf(f, "property uchar blue\n");
-                const uint faces = vc/3;
-                fprintf(f, "element face %u\n", faces);
-                fprintf(f, "property list uchar uint vertex_indices\n");
-                fprintf(f, "end_header\n");
-                for(uchar z = 0; z < 128; z++)
-                {
-                    for(uchar y = 0; y < 128; y++)
-                    {
-                        for(uchar x = 0; x < 128; x++)
-                        {
-                            const uint i = PTI(x,y,z);
-                            if(g.voxels[i] < 8){continue;}
-                            const uint tu = g.colors[g.voxels[i]-1];
-                            uchar cr = (tu & 0x00FF0000) >> 16;
-                            uchar cg = (tu & 0x0000FF00) >> 8;
-                            uchar cb = (tu & 0x000000FF);
-                            if(cr != 0 || cg != 0 || cb != 0)
-                            {
-                                int r = PTIB2(x-1, y, z);
-                                if(r < 0 || g.voxels[r] == 0){fw_mx(f, x, y, z, cr, cg, cb);}
-                                r = PTIB2(x+1, y, z);
-                                if(r < 0 || g.voxels[r] == 0){fw_px(f, x, y, z, cr, cg, cb);}
-                                r = PTIB2(x, y-1, z);
-                                if(r < 0 || g.voxels[r] == 0){fw_my(f, x, y, z, cr, cg, cb);}
-                                r = PTIB2(x, y+1, z);
-                                if(r < 0 || g.voxels[r] == 0){fw_py(f, x, y, z, cr, cg, cb);}
-                                r = PTIB2(x, y, z-1);
-                                if(r < 0 || g.voxels[r] == 0){fw_mz(f, x, y, z, cr, cg, cb);}
-                                r = PTIB2(x, y, z+1);
-                                if(r < 0 || g.voxels[r] == 0){fw_pz(f, x, y, z, cr, cg, cb);}
-                            }
-                        }
-                    }
-                }
-                // merge vertices by distance in Blender or `Cleaning and Repairing > Merge Close Vertices` in MeshLab
-                for(int i = 0, t = 0; i < faces; i++)
-                {
-                    const int i1 = t++;
-                    const int i2 = t++;
-                    const int i3 = t++;
-                    fprintf(f, "3 %i %i %i\n", i1, i2, i3);
-                }
-                fclose(f);
-                char tmp[16];
-                timestamp(tmp);
-                printf("[%s] Exported PLY: %s\n", tmp, export_path);
-            }
-        }
-        return 0;
-    }
-
-    // custom mouse sensitivity
-    if(argc >= 3)
-    {
-        g.sens = atof(argv[2]);
-        if(g.sens == 0.f){g.sens = 0.003f;}
-        char tmp[16];
-        timestamp(tmp);
-        printf("[%s] Custom mouse sensitivity applied to project \"%s\".\n", tmp, openTitle);
-    }
-
-    // load custom palette
-    if(argc >= 4){loadColors(argv[3]);}
-
-//*************************************
-// window creation
-//*************************************
-    if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_EVENTS) < 0)
-    {
-        printf("ERROR: SDL_Init(): %s\n", SDL_GetError());
-        return 1;
-    }
-    int msaa = 16;
-    if(msaa > 0)
-    {
-        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, msaa);
-    }
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-    wnd = SDL_CreateWindow(appTitle, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winw, winh, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_BORDERLESS);
-    while(wnd == NULL)
-    {
-        if(msaa == 0)
-        {
-            printf("ERROR: SDL_CreateWindow(): %s\n", SDL_GetError());
-            return 1;
-        }
-        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, msaa/2);
-        wnd = SDL_CreateWindow(appTitle, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winw, winh, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_BORDERLESS);
-    }
-    SDL_GL_SetSwapInterval(1);
-    glc = SDL_GL_CreateContext(wnd);
-    if(glc == NULL)
-    {
-        printf("ERROR: SDL_GL_CreateContext(): %s\n", SDL_GetError());
-        return 1;
-    }
-
-    // set icon
-    s_icon = surfaceFromData((Uint32*)&icon, 16, 16);
-    SDL_SetWindowIcon(wnd, s_icon);
-
-    // window title
-    char nt[512];
-    sprintf(nt, "%s - %s", appTitle, openTitle);
-    SDL_SetWindowTitle(wnd, nt);
-
-    if(argc >= 2 && strcmp(argv[1], "debug") == 0)
-    {
-        printf("----\nDEBUG\n----\n");
-        printAttrib(SDL_GL_DOUBLEBUFFER, "GL_DOUBLEBUFFER");
-        printAttrib(SDL_GL_DEPTH_SIZE, "GL_DEPTH_SIZE");
-        printAttrib(SDL_GL_RED_SIZE, "GL_RED_SIZE");
-        printAttrib(SDL_GL_GREEN_SIZE, "GL_GREEN_SIZE");
-        printAttrib(SDL_GL_BLUE_SIZE, "GL_BLUE_SIZE");
-        printAttrib(SDL_GL_ALPHA_SIZE, "GL_ALPHA_SIZE");
-        printAttrib(SDL_GL_BUFFER_SIZE, "GL_BUFFER_SIZE");
-        printAttrib(SDL_GL_STENCIL_SIZE, "GL_STENCIL_SIZE");
-        printAttrib(SDL_GL_ACCUM_RED_SIZE, "GL_ACCUM_RED_SIZE");
-        printAttrib(SDL_GL_ACCUM_GREEN_SIZE, "GL_ACCUM_GREEN_SIZE");
-        printAttrib(SDL_GL_ACCUM_BLUE_SIZE, "GL_ACCUM_BLUE_SIZE");
-        printAttrib(SDL_GL_ACCUM_ALPHA_SIZE, "GL_ACCUM_ALPHA_SIZE");
-        printAttrib(SDL_GL_STEREO, "GL_STEREO");
-        printAttrib(SDL_GL_MULTISAMPLEBUFFERS, "GL_MULTISAMPLEBUFFERS");
-        printAttrib(SDL_GL_MULTISAMPLESAMPLES, "GL_MULTISAMPLESAMPLES");
-        printAttrib(SDL_GL_ACCELERATED_VISUAL, "GL_ACCELERATED_VISUAL");
-        printAttrib(SDL_GL_RETAINED_BACKING, "GL_RETAINED_BACKING");
-        printAttrib(SDL_GL_CONTEXT_MAJOR_VERSION, "GL_CONTEXT_MAJOR_VERSION");
-        printAttrib(SDL_GL_CONTEXT_MINOR_VERSION, "GL_CONTEXT_MINOR_VERSION");
-        printAttrib(SDL_GL_CONTEXT_FLAGS, "GL_CONTEXT_FLAGS");
-        printAttrib(SDL_GL_CONTEXT_PROFILE_MASK, "GL_CONTEXT_PROFILE_MASK");
-        printAttrib(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, "GL_SHARE_WITH_CURRENT_CONTEXT");
-        printAttrib(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, "GL_FRAMEBUFFER_SRGB_CAPABLE");
-        printAttrib(SDL_GL_CONTEXT_RELEASE_BEHAVIOR, "GL_CONTEXT_RELEASE_BEHAVIOR");
-        printAttrib(SDL_GL_CONTEXT_EGL, "GL_CONTEXT_EGL");
-        printf("----\n");
-        printf("semaJmailliWrehctelF\n");
-        printf("buhtig.moc\\dibrm\n");
-        //printf("James William Fletcher (github.com/mrbid)\n");
-        printf("----\n");
-        SDL_version compiled;
-        SDL_version linked;
-        SDL_VERSION(&compiled);
-        SDL_GetVersion(&linked);
-        printf("Compiled against SDL version %u.%u.%u.\n", compiled.major, compiled.minor, compiled.patch);
-        printf("Linked against SDL version %u.%u.%u.\n", linked.major, linked.minor, linked.patch);
-        printf("----\n");
-        printf("currentPath: %s\n", basedir);
-        printf("dataPath:    %s\n", appdir);
-        printf("----\n");
-    }
-
-//*************************************
-// projection & compile & link shader program
-//*************************************
-    doPerspective();
-    makeVoxel();
-    makeHud();
-
-//*************************************
-// configure render options
-//*************************************
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_CULL_FACE);
-    glEnable(GL_DEPTH_TEST);
-    glLineWidth(0.f);
-    glClearColor(0.f, 0.f, 0.f, 0.f);
-    shadeVoxel(&projection_id, &view_id, &position_id, &voxel_id);
-    glUniformMatrix4fv(projection_id, 1, GL_FALSE, (float*)&projection.m[0][0]);
-
-//*************************************
-// final init stuff
-//*************************************
     sHud = SDL_RGBA32Surface(winw, winh);
     drawHud(0);
     hudmap = esLoadTextureA(winw, winh, sHud->pixels, 0);
-    updateSelectColor();
+    ww = (float)winw;
+    wh = (float)winh;
+    mIdent(&projection);
+    mPerspective(&projection, 60.0f, ww / wh, 1.0f, vdist);
+    glUniformMatrix4fv(projection_id, 1, GL_FALSE, (float*)&projection.m[0][0]);
+}
+uint insideFrustum(const float x, const float y, const float z)
+{
+    const float xm = x+g.pp.x, ym = y+g.pp.y, zm = z+g.pp.z;
+    return (xm*look_dir.x) + (ym*look_dir.y) + (zm*look_dir.z) > 0.f; // check the angle
+}
+SDL_Surface* surfaceFromData(const Uint32* data, Uint32 w, Uint32 h)
+{
+    SDL_Surface* s = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA32);
+    memcpy(s->pixels, data, s->pitch*h);
+    return s;
+}
+Uint32 getpixel(const SDL_Surface *surface, Uint32 x, Uint32 y)
+{
+    const Uint8 *p = (Uint8*)surface->pixels + y * surface->pitch + x * surface->format->BytesPerPixel;
+    return *(Uint32*)p;
+}
+void setpixel(SDL_Surface *surface, Uint32 x, Uint32 y, Uint32 pix)
+{
+    const Uint8* pixel = (Uint8*)surface->pixels + (y * surface->pitch) + (x * surface->format->BytesPerPixel);
+    *((Uint32*)pixel) = pix;
+}
+void replaceColour(SDL_Surface* surf, SDL_Rect r, Uint32 old_color, Uint32 new_color)
+{
+    const Uint32 max_y = r.y+r.h;
+    const Uint32 max_x = r.x+r.w;
+    for(Uint32 y = r.y; y < max_y; ++y)
+        for(Uint32 x = r.x; x < max_x; ++x)
+            if(getpixel(surf, x, y) == old_color){setpixel(surf, x, y, new_color);}
+}
+void updateSelectColor()
+{
+    const uint tu = g.colors[(uint)g.st-1];
+    sclr = SDL_MapRGB(sHud->format, (tu & 0x00FF0000) >> 16,
+                                    (tu & 0x0000FF00) >> 8,
+                                     tu & 0x000000FF);
+}
 
 //*************************************
-// execute update / render loop
+// Simple Font
 //*************************************
-    t = fTime();
-    while(1){main_loop();}
-    return 0;
+int drawText(SDL_Surface* o, const char* s, Uint32 x, Uint32 y, Uint8 colour)
+{
+    static const Uint8 font_map[] = {255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,0,0,0,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,0,255,255,0,0,0,0,0,255,255,0,0,0,0,0,0,0,0,0,0,255,255,0,0,0,0,0,0,0,0,0,0,255,0,0,0,0,0,0,0,0,255,255,255,0,0,0,0,0,0,255,0,0,0,0,0,0,255,255,0,0,0,0,255,255,255,0,0,255,255,255,255,255,0,0,0,0,255,255,255,0,255,0,0,0,0,0,255,0,0,0,0,0,255,255,0,0,0,0,0,255,0,0,0,0,0,255,255,255,0,0,0,0,0,0,0,0,0,0,0,0,0,255,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,0,0,0,0,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,0,0,255,255,255,255,0,0,255,0,0,0,0,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,255,255,0,255,255,0,0,0,0,0,255,0,0,0,0,255,0,0,0,0,0,0,255,0,0,0,0,255,255,0,0,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,0,255,255,0,0,255,255,0,0,0,0,255,255,255,255,0,0,255,255,0,0,255,0,0,255,255,255,0,0,255,255,255,0,0,255,255,255,255,255,0,0,255,255,255,0,0,255,0,0,255,255,255,255,0,0,0,0,255,0,0,255,0,0,255,255,255,0,0,0,255,255,255,0,0,0,0,0,0,255,255,0,0,0,255,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,0,0,0,0,255,255,0,0,255,0,0,255,255,255,255,255,255,0,0,255,255,0,0,255,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,255,255,255,255,0,0,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,0,0,0,0,0,255,0,0,255,255,0,0,0,0,255,255,0,0,255,255,255,0,0,255,255,0,0,255,255,255,0,0,255,255,255,255,255,255,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,255,255,255,255,255,255,255,0,255,255,255,255,255,255,255,255,0,0,255,0,0,255,0,0,255,255,0,0,0,0,255,255,255,255,0,0,255,255,255,0,0,0,0,255,255,255,0,0,255,255,255,0,0,255,255,255,255,255,0,0,255,255,255,0,0,255,0,0,255,255,255,255,0,0,0,0,0,0,255,255,0,0,255,255,255,0,0,0,0,255,0,0,0,0,0,0,0,0,255,0,0,0,255,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,0,0,0,0,255,255,0,0,255,0,0,255,255,255,255,255,255,0,0,255,255,0,0,255,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,255,255,0,0,255,0,0,0,0,255,255,0,0,0,0,255,255,255,255,0,0,0,255,0,0,0,0,255,0,0,0,0,0,255,255,0,0,0,0,255,0,0,0,0,0,255,0,0,0,0,255,0,0,0,255,255,0,0,0,0,0,0,0,0,0,0,255,0,0,0,0,0,0,0,255,255,0,0,0,0,0,0,0,0,0,255,0,0,0,255,0,0,0,0,0,255,255,0,0,0,0,255,0,0,0,0,0,255,255,0,0,0,0,0,0,0,255,0,255,0,0,0,0,0,0,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,0,0,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,0,0,0,0,0,255,255,0,0,255,0,0,255,255,255,255,255,0,0,255,255,255,255,0,0,255,255,0,0,0,255,255,0,0,255,255,255,0,0,255,255,255,255,255,255,255,0,0,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,255,255,0,255,255,255,255,255,255,255,255,0,0,255,0,0,255,0,0,0,0,0,255,0,0,255,255,255,255,0,0,255,255,255,0,0,0,0,0,0,0,0,0,0,0,0,0,0,255,255,255,255,255,0,0,0,0,0,0,0,255,0,0,255,255,255,255,0,0,0,0,0,255,255,255,0,0,255,255,255,0,255,0,0,0,0,255,0,0,0,255,0,0,0,0,0,0,255,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,0,0,0,0,255,255,0,0,255,0,0,0,0,0,255,255,255,0,0,255,255,0,0,255,255,255,0,0,255,0,0,0,0,255,255,0,0,255,0,0,255,0,0,255,255,255,0,0,255,255,255,0,0,0,0,255,255,255,0,0,0,255,255,255,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,0,0,0,0,255,0,0,255,0,0,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,0,0,0,0,255,255,255,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,0,0,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,255,255,255,0,0,0,0,255,255,0,0,255,0,0,255,255,255,255,0,0,255,255,255,0,0,0,255,255,0,255,0,0,255,255,0,0,0,0,255,0,0,0,0,0,255,255,255,255,0,0,255,255,0,0,0,0,255,0,0,255,255,0,0,0,0,255,255,255,255,255,0,255,255,255,255,255,255,255,255,0,0,255,0,0,255,0,0,255,255,0,0,0,0,255,255,255,255,0,0,255,255,255,0,0,0,0,255,255,255,0,0,255,255,255,0,0,255,255,0,0,0,0,0,255,255,255,0,0,255,0,0,255,255,255,255,0,0,0,0,0,255,255,255,0,0,255,255,255,0,255,255,0,0,255,255,0,0,0,255,255,0,0,0,0,0,255,255,255,0,0,0,0,0,0,0,255,0,0,255,255,255,0,0,0,0,0,0,0,255,255,255,0,0,0,0,0,255,255,0,0,255,255,0,0,255,255,255,0,0,255,0,0,0,0,255,255,0,0,0,0,0,0,0,0,255,255,255,0,0,255,255,255,255,0,0,255,255,255,0,0,0,255,255,255,0,0,0,0,0,0,0,255,255,0,0,0,0,255,255,255,0,0,255,255,0,0,0,0,0,0,0,0,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,0,0,0,0,0,0,255,255,0,0,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,0,0,255,255,0,0,255,255,0,0,255,0,0,0,0,255,0,0,255,0,0,255,0,0,255,0,0,0,0,255,255,0,0,0,0,255,255,255,0,0,255,0,0,255,255,0,0,255,0,0,255,255,255,0,0,255,255,255,255,255,255,0,0,0,255,255,0,0,255,255,255,255,255,0,0,0,0,255,255,0,0,255,255,255,0,0,255,0,0,255,255,0,0,255,0,0,0,0,0,255,255,255,255,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,255,255,0,0,0,0,255,255,255,255,0,0,255,255,255,0,0,0,0,255,255,255,0,0,255,255,255,0,0,255,255,255,0,0,0,0,255,255,255,0,0,255,0,0,255,255,255,255,0,0,0,0,0,0,255,255,0,0,255,255,255,0,255,255,255,255,255,255,0,0,0,255,255,255,0,0,0,0,255,255,255,0,0,0,0,255,255,255,255,0,0,255,255,255,0,0,0,0,255,0,0,255,255,255,255,255,255,0,0,255,255,0,0,255,255,0,0,255,255,255,0,0,255,0,0,0,0,255,255,0,0,0,255,255,0,0,0,255,255,0,0,0,0,255,255,255,0,0,255,255,0,0,0,255,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,0,0,255,255,0,0,0,0,255,255,255,255,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,0,0,0,0,0,0,255,255,0,0,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,0,0,0,0,0,0,255,255,0,0,255,255,0,0,255,0,0,0,0,255,0,0,0,0,0,0,0,0,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,0,0,255,255,0,0,255,255,255,255,255,255,255,0,0,0,0,0,0,0,0,255,255,255,255,0,0,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,255,255,255,0,0,255,255,255,255,255,255,255,0,255,255,255,255,255,255,255,0,0,255,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,255,0,0,255,255,0,0,255,0,0,255,255,255,0,0,255,255,255,0,0,255,255,255,0,0,0,0,255,255,255,0,0,255,0,0,255,255,255,255,0,0,0,0,255,0,0,255,0,0,255,255,255,0,255,255,255,255,255,255,0,0,0,255,255,255,255,0,0,0,255,255,255,0,0,0,0,255,255,255,255,0,0,255,255,255,0,0,0,0,255,255,0,0,255,255,255,255,255,0,0,255,255,0,0,255,255,0,0,255,255,255,0,0,255,255,0,0,255,255,255,255,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,255,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,0,0,255,255,0,0,0,0,255,255,255,255,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,0,0,0,0,255,0,0,255,0,0,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,255,255,0,0,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,255,255,0,0,255,255,0,0,255,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,255,255,0,0,255,255,0,0,255,0,0,255,0,0,255,255,255,255,0,0,255,255,0,0,255,255,255,0,0,255,0,0,255,255,0,0,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,255,255,255,0,0,0,0,0,0,255,255,255,0,255,255,255,255,255,255,255,0,0,255,255,255,0,0,0,0,0,0,0,255,255,0,0,0,0,0,0,0,0,0,0,255,255,0,0,0,0,0,0,0,255,255,255,255,0,0,0,0,0,0,0,0,255,255,255,0,0,0,0,0,0,0,0,0,0,255,0,0,255,255,0,0,0,0,0,0,0,0,255,255,255,255,255,255,0,0,0,255,255,255,255,0,255,0,0,0,0,0,255,0,0,255,255,255,255,255,0,0,0,0,0,255,0,0,255,255,255,0,0,0,0,0,0,0,255,255,255,0,0,255,255,255,0,0,0,0,0,255,255,255,0,0,255,255,255,255,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,255,0,0,0,0,0,0,255,0,0,0,0,0,0,0,0,0,0,255,255,0,0,0,0,255,0,0,0,0,0,255,0,0,0,0,0,0,0,255,255,255,0,0,0,0,0,0,0,255,255,0,0,0,0,255,0,0,0,0,255,255,0,0,0,0,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,255,0,0,0,0,255,0,0,0,0,0,255,255,0,0,0,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,255,0,0,0,0,0,255,255,0,0,255,255,255,0,0,255,255,0,0,255,0,0,255,255,0,0,255,255,0,0,255,255,0,0,0,0,0,255,0,0,0,0,255,0,0,0,0,0,0,0,0,0,0,255,0,0,0,0,255,255,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,0,0,255,255,255,0,0,0,0,255,255,0,0,0,0,255,0,0,0,0,255,255,255,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,0,0,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255};
+    static const Uint32 m = 1;
+    static SDL_Surface* font_black = NULL;
+    static SDL_Surface* font_white = NULL;
+    static SDL_Surface* font_aqua = NULL;
+    static SDL_Surface* font_gold = NULL;
+    static SDL_Surface* font_cia = NULL;
+    // static SDL_Surface* font_red = NULL;
+    // static SDL_Surface* font_green = NULL;
+    // static SDL_Surface* font_blue = NULL;
+    if(font_black == NULL)
+    {
+        font_black = SDL_RGBA32Surface(380, 11);
+        for(int y = 0; y < font_black->h; y++)
+        {
+            for(int x = 0; x < font_black->w; x++)
+            {
+                const Uint8 c = font_map[(y*font_black->w)+x];
+                setpixel(font_black, x, y, SDL_MapRGBA(font_black->format, c, c, c, 255-c));
+            }
+        }
+        font_white = SDL_RGBA32Surface(380, 11);
+        SDL_BlitSurface(font_black, &font_black->clip_rect, font_white, &font_white->clip_rect);
+        replaceColour(font_white, font_white->clip_rect, 0xFF000000, 0xFFFFFFFF);
+        font_aqua = SDL_RGBA32Surface(380, 11);
+        SDL_BlitSurface(font_black, &font_black->clip_rect, font_aqua, &font_aqua->clip_rect);
+        replaceColour(font_aqua, font_aqua->clip_rect, 0xFF000000, 0xFFFFFF00);
+        font_gold = SDL_RGBA32Surface(380, 11);
+        SDL_BlitSurface(font_black, &font_black->clip_rect, font_gold, &font_gold->clip_rect);
+        replaceColour(font_gold, font_gold->clip_rect, 0xFF000000, 0xFF00BFFF);
+        font_cia = SDL_RGBA32Surface(380, 11);
+        SDL_BlitSurface(font_black, &font_black->clip_rect, font_cia, &font_cia->clip_rect);
+        replaceColour(font_cia, font_cia->clip_rect, 0xFF000000, 0xFF97C920);
+        // #20c997(0xFF97C920) #00FF41(0xFF41FF00) #61d97c(0xFF7CD961) #51d4e9(0xFFE9D451)
+        // font_red = SDL_RGBA32Surface(380, 11);
+        // SDL_BlitSurface(font_black, &font_black->clip_rect, font_red, &font_red->clip_rect);
+        // replaceColour(font_red, font_red->clip_rect, 0xFF000000, 0xFF0000FF);
+        // font_green = SDL_RGBA32Surface(380, 11);
+        // SDL_BlitSurface(font_black, &font_black->clip_rect, font_green, &font_green->clip_rect);
+        // replaceColour(font_green, font_green->clip_rect, 0xFF000000, 0xFF00FF00);
+        // font_blue = SDL_RGBA32Surface(380, 11);
+        // SDL_BlitSurface(font_black, &font_black->clip_rect, font_blue, &font_blue->clip_rect);
+        // replaceColour(font_blue, font_blue->clip_rect, 0xFF000000, 0xFFFF0000);
+
+
+    }
+    if(s[0] == '*' && s[1] == 'K') // signal cleanup
+    {
+        SDL_FreeSurface(font_black);
+        SDL_FreeSurface(font_white);
+        SDL_FreeSurface(font_aqua);
+        SDL_FreeSurface(font_gold);
+        SDL_FreeSurface(font_cia);
+        // SDL_FreeSurface(font_red);
+        // SDL_FreeSurface(font_green);
+        // SDL_FreeSurface(font_blue);
+        font_black = NULL;
+        return 0;
+    }
+    SDL_Surface* font = font_black;
+    if(     colour == 1){font = font_white;}
+    else if(colour == 2){font = font_aqua;}
+    else if(colour == 3){font = font_gold;}
+    else if(colour == 4){font = font_cia;}
+    // else if(colour == 5){font = font_red;}
+    // else if(colour == 6){font = font_green;}
+    // else if(colour == 7){font = font_blue;}
+    SDL_Rect dr = {x, y, 0, 0};
+    const Uint32 len = strlen(s);
+    for(Uint32 i = 0; i < len; i++)
+    {
+             if(s[i] == 'A'){SDL_BlitSurface(font, &(SDL_Rect){0,0,7,9}, o, &dr); dr.x += 7+m;}
+        else if(s[i] == 'B'){SDL_BlitSurface(font, &(SDL_Rect){7,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'C'){SDL_BlitSurface(font, &(SDL_Rect){13,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'D'){SDL_BlitSurface(font, &(SDL_Rect){19,0,7,9}, o, &dr); dr.x += 7+m;}
+        else if(s[i] == 'E'){SDL_BlitSurface(font, &(SDL_Rect){26,0,5,9}, o, &dr); dr.x += 5+m;}
+        else if(s[i] == 'F'){SDL_BlitSurface(font, &(SDL_Rect){31,0,5,9}, o, &dr); dr.x += 5+m;}
+        else if(s[i] == 'G'){SDL_BlitSurface(font, &(SDL_Rect){36,0,7,9}, o, &dr); dr.x += 7+m;}
+        else if(s[i] == 'H'){SDL_BlitSurface(font, &(SDL_Rect){43,0,7,9}, o, &dr); dr.x += 7+m;}
+        else if(s[i] == 'I'){SDL_BlitSurface(font, &(SDL_Rect){50,0,4,9}, o, &dr); dr.x += 4+m;}
+        else if(s[i] == 'J'){SDL_BlitSurface(font, &(SDL_Rect){54,0,5,9}, o, &dr); dr.x += 5+m;}
+        else if(s[i] == 'K'){SDL_BlitSurface(font, &(SDL_Rect){59,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'L'){SDL_BlitSurface(font, &(SDL_Rect){65,0,5,9}, o, &dr); dr.x += 5+m;}
+        else if(s[i] == 'M'){SDL_BlitSurface(font, &(SDL_Rect){70,0,9,9}, o, &dr); dr.x += 9+m;}
+        else if(s[i] == 'N'){SDL_BlitSurface(font, &(SDL_Rect){79,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'O'){SDL_BlitSurface(font, &(SDL_Rect){85,0,7,9}, o, &dr); dr.x += 7+m;}
+        else if(s[i] == 'P'){SDL_BlitSurface(font, &(SDL_Rect){92,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'Q'){SDL_BlitSurface(font, &(SDL_Rect){98,0,7,11}, o, &dr); dr.x += 7+m;}
+        else if(s[i] == 'R'){SDL_BlitSurface(font, &(SDL_Rect){105,0,7,9}, o, &dr); dr.x += 7+m;}
+        else if(s[i] == 'S'){SDL_BlitSurface(font, &(SDL_Rect){112,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'T'){SDL_BlitSurface(font, &(SDL_Rect){118,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'U'){SDL_BlitSurface(font, &(SDL_Rect){124,0,7,9}, o, &dr); dr.x += 7+m;}
+        else if(s[i] == 'V'){SDL_BlitSurface(font, &(SDL_Rect){131,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'W'){SDL_BlitSurface(font, &(SDL_Rect){137,0,10,9}, o, &dr); dr.x += 10+m;}
+        else if(s[i] == 'X'){SDL_BlitSurface(font, &(SDL_Rect){147,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'Y'){SDL_BlitSurface(font, &(SDL_Rect){153,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'Z'){SDL_BlitSurface(font, &(SDL_Rect){159,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'a'){SDL_BlitSurface(font, &(SDL_Rect){165,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'b'){SDL_BlitSurface(font, &(SDL_Rect){171,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'c'){SDL_BlitSurface(font, &(SDL_Rect){177,0,5,9}, o, &dr); dr.x += 5+m;}
+        else if(s[i] == 'd'){SDL_BlitSurface(font, &(SDL_Rect){182,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'e'){SDL_BlitSurface(font, &(SDL_Rect){188,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'f'){SDL_BlitSurface(font, &(SDL_Rect){194,0,4,9}, o, &dr); dr.x += 3+m;}
+        else if(s[i] == 'g'){SDL_BlitSurface(font, &(SDL_Rect){198,0,6,11}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'h'){SDL_BlitSurface(font, &(SDL_Rect){204,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'i'){SDL_BlitSurface(font, &(SDL_Rect){210,0,2,9}, o, &dr); dr.x += 2+m;}
+        else if(s[i] == 'j'){SDL_BlitSurface(font, &(SDL_Rect){212,0,3,11}, o, &dr); dr.x += 3+m;}
+        else if(s[i] == 'k'){SDL_BlitSurface(font, &(SDL_Rect){215,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'l'){SDL_BlitSurface(font, &(SDL_Rect){221,0,2,9}, o, &dr); dr.x += 2+m;}
+        else if(s[i] == 'm'){SDL_BlitSurface(font, &(SDL_Rect){223,0,10,9}, o, &dr); dr.x += 10+m;}
+        else if(s[i] == 'n'){SDL_BlitSurface(font, &(SDL_Rect){233,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'o'){SDL_BlitSurface(font, &(SDL_Rect){239,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'p'){SDL_BlitSurface(font, &(SDL_Rect){245,0,6,11}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'q'){SDL_BlitSurface(font, &(SDL_Rect){251,0,6,11}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'r'){SDL_BlitSurface(font, &(SDL_Rect){257,0,4,9}, o, &dr); dr.x += 4+m;}
+        else if(s[i] == 's'){SDL_BlitSurface(font, &(SDL_Rect){261,0,5,9}, o, &dr); dr.x += 5+m;}
+        else if(s[i] == 't'){SDL_BlitSurface(font, &(SDL_Rect){266,0,4,9}, o, &dr); dr.x += 4+m;}
+        else if(s[i] == 'u'){SDL_BlitSurface(font, &(SDL_Rect){270,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'v'){SDL_BlitSurface(font, &(SDL_Rect){276,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'w'){SDL_BlitSurface(font, &(SDL_Rect){282,0,8,9}, o, &dr); dr.x += 8+m;}
+        else if(s[i] == 'x'){SDL_BlitSurface(font, &(SDL_Rect){290,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'y'){SDL_BlitSurface(font, &(SDL_Rect){296,0,6,11}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'z'){SDL_BlitSurface(font, &(SDL_Rect){302,0,5,9}, o, &dr); dr.x += 5+m;}
+        else if(s[i] == '0'){SDL_BlitSurface(font, &(SDL_Rect){307,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == '1'){SDL_BlitSurface(font, &(SDL_Rect){313,0,4,9}, o, &dr); dr.x += 4+m;}
+        else if(s[i] == '2'){SDL_BlitSurface(font, &(SDL_Rect){317,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == '3'){SDL_BlitSurface(font, &(SDL_Rect){323,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == '4'){SDL_BlitSurface(font, &(SDL_Rect){329,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == '5'){SDL_BlitSurface(font, &(SDL_Rect){335,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == '6'){SDL_BlitSurface(font, &(SDL_Rect){341,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == '7'){SDL_BlitSurface(font, &(SDL_Rect){347,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == '8'){SDL_BlitSurface(font, &(SDL_Rect){353,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == '9'){SDL_BlitSurface(font, &(SDL_Rect){359,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == ':'){SDL_BlitSurface(font, &(SDL_Rect){365,0,2,9}, o, &dr); dr.x += 2+m;}
+        else if(s[i] == '.'){SDL_BlitSurface(font, &(SDL_Rect){367,0,2,9}, o, &dr); dr.x += 2+m;}
+        else if(s[i] == '+'){SDL_BlitSurface(font, &(SDL_Rect){369,0,7,9}, o, &dr); dr.x += 7+m;}
+        else if(s[i] == '-'){dr.x++; SDL_BlitSurface(font, &(SDL_Rect){376,0,4,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == ' '){dr.x += 2+m;}
+    }
+    return dr.x;
 }
+int lenText(const char* s)
+{
+    int x = 0;
+    static const int m = 1;
+    const Uint32 len = strlen(s);
+    for(Uint32 i = 0; i < len; i++)
+    {
+             if(s[i] == 'A'){x += 7+m;}
+        else if(s[i] == 'B'){x += 6+m;}
+        else if(s[i] == 'C'){x += 6+m;}
+        else if(s[i] == 'D'){x += 7+m;}
+        else if(s[i] == 'E'){x += 5+m;}
+        else if(s[i] == 'F'){x += 5+m;}
+        else if(s[i] == 'G'){x += 7+m;}
+        else if(s[i] == 'H'){x += 7+m;}
+        else if(s[i] == 'I'){x += 4+m;}
+        else if(s[i] == 'J'){x += 5+m;}
+        else if(s[i] == 'K'){x += 6+m;}
+        else if(s[i] == 'L'){x += 5+m;}
+        else if(s[i] == 'M'){x += 9+m;}
+        else if(s[i] == 'N'){x += 6+m;}
+        else if(s[i] == 'O'){x += 7+m;}
+        else if(s[i] == 'P'){x += 6+m;}
+        else if(s[i] == 'Q'){x += 7+m;}
+        else if(s[i] == 'R'){x += 7+m;}
+        else if(s[i] == 'S'){x += 6+m;}
+        else if(s[i] == 'T'){x += 6+m;}
+        else if(s[i] == 'U'){x += 7+m;}
+        else if(s[i] == 'V'){x += 6+m;}
+        else if(s[i] == 'W'){x += 10+m;}
+        else if(s[i] == 'X'){x += 6+m;}
+        else if(s[i] == 'Y'){x += 6+m;}
+        else if(s[i] == 'Z'){x += 6+m;}
+        else if(s[i] == 'a'){x += 6+m;}
+        else if(s[i] == 'b'){x += 6+m;}
+        else if(s[i] == 'c'){x += 5+m;}
+        else if(s[i] == 'd'){x += 6+m;}
+        else if(s[i] == 'e'){x += 6+m;}
+        else if(s[i] == 'f'){x += 3+m;}
+        else if(s[i] == 'g'){x += 6+m;}
+        else if(s[i] == 'h'){x += 6+m;}
+        else if(s[i] == 'i'){x += 2+m;}
+        else if(s[i] == 'j'){x += 3+m;}
+        else if(s[i] == 'k'){x += 6+m;}
+        else if(s[i] == 'l'){x += 2+m;}
+        else if(s[i] == 'm'){x += 10+m;}
+        else if(s[i] == 'n'){x += 6+m;}
+        else if(s[i] == 'o'){x += 6+m;}
+        else if(s[i] == 'p'){x += 6+m;}
+        else if(s[i] == 'q'){x += 6+m;}
+        else if(s[i] == 'r'){x += 4+m;}
+        else if(s[i] == 's'){x += 5+m;}
+        else if(s[i] == 't'){x += 4+m;}
+        else if(s[i] == 'u'){x += 6+m;}
+        else if(s[i] == 'v'){x += 6+m;}
+        else if(s[i] == 'w'){x += 8+m;}
+        else if(s[i] == 'x'){x += 6+m;}
+        else if(s[i] == 'y'){x += 6+m;}
+        else if(s[i] == 'z'){x += 5+m;}
+        else if(s[i] == '0'){x += 6+m;}
+        else if(s[i] == '1'){x += 4+m;}
+        else if(s[i] == '2'){x += 6+m;}
+        else if(s[i] == '3'){x += 6+m;}
+        else if(s[i] == '4'){x += 6+m;}
+        else if(s[i] == '5'){x += 6+m;}
+        else if(s[i] == '6'){x += 6+m;}
+        else if(s[i] == '7'){x += 6+m;}
+        else if(s[i] == '8'){x += 6+m;}
+        else if(s[i] == '9'){x += 6+m;}
+        else if(s[i] == ':'){x += 2+m;}
+        else if(s[i] == '.'){x += 2+m;}
+        else if(s[i] == '+'){x += 7+m;}
+        else if(s[i] == '-'){x += 7+m;}
+        else if(s[i] == ' '){x += 2+m;}
+    }
+    return x;
+}
+
+//*************************************
+// assets
+//*************************************
+const unsigned char icon[] = { // 16, 16, 4
+  "\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000\000"
+  "\000\000\"\070)\071f\000\000\000\"\377\377\377\000\377\377\377\000\377\377\377\000\377\377"
+  "\377\000\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377"
+  "\000\377\377\377\000\377\377\377\000\227o\231\231\235t\237\231\264\205\267\314"
+  "\323\234\326\356\277\216\302\335\260\202\262\273\227o\231\210iMjU\377\377"
+  "\377\000\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377"
+  "\000\377\377\377\000\235t\237\273\347\253\350\377\347\253\350\377\365\255\354"
+  "\377\360\252\347\377\356\255\355\377\347\253\350\377\356\255\355\377\264"
+  "\205\267\356I\066J\063\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377"
+  "\000#\031#\021\235t\237\252\347\253\350\377\345\247\344\377\336\247\346\377\213"
+  "\236\342\377\251\240\341\377\317\245\345\377\336\247\346\377\345\247\344"
+  "\377\351\254\353\377\277\216\302\377\017\013\017\"\377\377\377\000\377\377\377"
+  "\000\377\377\377\000C\062Df\323\234\326\377\347\253\350\377\360\252\347\377\201"
+  "\233\337\377,\215\330\377\061\221\333\377:\227\337\377S\226\335\377\326\246"
+  "\345\377\356\255\355\377\306\223\307\356\377\377\377\000\377\377\377\000\377"
+  "\377\377\000\377\377\377\000\017\013\017\063\305\224\313\356\351\254\353\377\345"
+  "\247\344\377\326\246\345\377\277\232\334\377\232\215\321\377\210\222\345"
+  "\377\221\227\335\377\356\255\355\377\356\255\355\377\224\202\273\356\000\000"
+  "\000\"\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000n\205\277\314"
+  "\365\255\354\377\341\245\342\377\347\253\350\377\345\247\344\377\365\255"
+  "\354\377\360\252\347\377\355\247\345\377\347\253\350\377\341\245\342\377"
+  "\245\201\351\377\223r\324\377\203g\276\335oW\240\231\060&ED\377\377\377\000"
+  "Eh\237\273\272\246\351\377\336\247\346\377\360\252\347\377\360\252\347\377"
+  "\351\254\353\377\345\247\344\377\317\245\345\377\351\254\353\377\276\231"
+  "\346\377\241\177\362\377\246\202\360\377\253\206\366\377\234y\340\377'\037"
+  "\071f\377\377\377\000\060Cx\231B\224\340\377P\230\337\377s\235\342\377\235\234"
+  "\336\377\317\245\345\377\317\245\345\377H\234\345\377Y\234\344\377`\231\333"
+  "\377\223z\325\377\234y\340\377\253\206\366\377\213m\310\335\000\000\000\021\377"
+  "\377\377\000)T\200wHw\302\377L\202\315\377M\224\342\377:\227\337\377H\234\345"
+  "\377P\230\337\377G~\310\377C\206\321\377S\221\311\377\223z\325\377\223r\324"
+  "\377\253\206\366\377|a\263\273\377\377\377\000\377\377\377\000\067bxDQz\275\377"
+  "S\\\256\377\256\177\357\377\202{\332\377E}\306\377G~\310\377K\\\252\377D"
+  "Z\245\377xs\321\377\263\206\372\377\246\202\360\377\246\202\360\377kT\233"
+  "\210\377\377\377\000\377\377\377\000DME\"T\225\312\377B\214\331\377o\213\344"
+  "\377|}\332\377K\\\252\377Ja\256\377B\214\331\377C\206\321\377p\210\323\377"
+  "\225n\320\356\237|\345\377\242~\351\377M=pU\377\377\377\000\377\377\377\000\377"
+  "\377\377\000R~\236\252t\277\371\377Q\244\344\377B\224\340\377B\214\331\377"
+  "J\214\325\377m\270\363\377a\257\360\377Q\207\242\252\000\000\000\021Q@vfgQ\226\252"
+  "'\037\071\"\377\377\377\000\377\377\377\000\377\377\377\000Ii|Ux\255\315\335\206"
+  "\304\352\377\204\310\366\377m\270\363\377a\257\360\377}\265\325\377\200\272"
+  "\336\377\065M[D\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000\377"
+  "\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000\065M[D"
+  "a\215\247\210}\265\325\335u\252\312\335\000\000\000\"-BOD\377\377\377\000\377\377"
+  "\377\000\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377"
+  "\000\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000"
+  "\000\000\000\021\017\026\032D\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377"
+  "\000\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000",
+};
+
