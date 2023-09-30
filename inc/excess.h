@@ -159,8 +159,8 @@ int PTIB2(const char x, const char y, const char z)
 
 //*************************************
 // ray functions
-//*************************************
-int ray(vec* hit_pos, vec* hit_vec, const vec start_pos) // the look vector is a global
+//*************************************/
+int oldray(vec* hit_pos, vec* hit_vec, const vec start_pos) // the look vector is a global
 {
     // might need exclude conditions for obviously bogus rays to avoid those 2048 steps
     vec inc;
@@ -188,38 +188,152 @@ int ray(vec* hit_pos, vec* hit_vec, const vec start_pos) // the look vector is a
     }
     return hit;
 }
+
+int ray(vec* hit_pos, vec pos) // look vector is still a global, not going to mess with that for now
+{ // WARNING: currently only works when pos is within the world, TODO: remove this limitation
+	if (pos.x < 0.f || pos.x > 127.f || pos.y < 0.f || pos.y > 127.f || pos.z < 0.f || pos.z > 127.f) {
+		return -1;
+	}
+
+	vec dir = {
+		.x = look_dir.x >= 0 ? 1 : -1,
+		.y = look_dir.y >= 0 ? 1 : -1,
+		.z = look_dir.z >= 0 ? 1 : -1,
+	};
+
+	vec dir2 = {
+		.x = dir.x/2.f,
+		.y = dir.y/2.f,
+		.z = dir.z/2.f,
+	};
+
+	vec dist_per = {
+		.x = dir.x / look_dir.x, // inverse, but positive
+		.y = dir.y / look_dir.y,
+		.z = dir.z / look_dir.z,
+	};
+
+	vec dist_remaining = {
+		.x = (((dir.x + 1.f) / 2.f) - ((pos.x + 0.5f) - floorf(pos.x  + 0.5f))) / look_dir.x,
+		.y = (((dir.y + 1.f) / 2.f) - ((pos.y + 0.5f) - floorf(pos.y  + 0.5f))) / look_dir.y,
+		.z = (((dir.z + 1.f) / 2.f) - ((pos.z + 0.5f) - floorf(pos.z  + 0.5f))) / look_dir.z,
+	};
+
+	printf("Look dir: (%.02f, %.02f, %.02f)\n", look_dir.x, look_dir.y, look_dir.z);
+	printf("Pos: (%.02f, %.02f, %.02f)\n", pos.x, pos.y, pos.z);
+
+	while (1) {
+		printf("Distance remaining: (%.02f, %.02f, %.02f)\n", dist_remaining.x, dist_remaining.y, dist_remaining.z);
+		printf("Absolute distance remaining: (%.02f, %.02f, %.02f)\n", dist_remaining.x * look_dir.x, dist_remaining.y * look_dir.y, dist_remaining.z * look_dir.z);
+
+		if (dist_remaining.x < dist_remaining.y && dist_remaining.x < dist_remaining.z) {
+			pos.x += look_dir.x * dist_remaining.x;
+			pos.y += look_dir.y * dist_remaining.x;
+			pos.z += look_dir.z * dist_remaining.x;
+
+			dist_remaining.y -= dist_remaining.x;
+			dist_remaining.z -= dist_remaining.x;
+
+			dist_remaining.x = dist_per.x;
+
+			if (pos.x + dir.x >= 128.f || pos.x + dir.x < 0.f) {
+				return -1;
+			}
+
+			int index = PTI(roundf(pos.x + dir2.x) + 0.5f, roundf(pos.y) + 0.5f, roundf(pos.z) + 0.5f);
+			if (g.voxels[index]) {
+				*hit_pos = (vec){
+					.x = 0.1f + pos.x - dir2.x,
+					.y = 0.1f + roundf(pos.y),
+					.z = 0.1f + roundf(pos.z),
+				};
+				printf("Hit: (%.02f, %.02f, %.02f)\n", hit_pos->x, hit_pos->y, hit_pos->z);
+				return index;
+			}
+		} else if (dist_remaining.y < dist_remaining.z) {
+			pos.x += look_dir.x * dist_remaining.y;
+			pos.y += look_dir.y * dist_remaining.y;
+			pos.z += look_dir.z * dist_remaining.y;
+
+			dist_remaining.x -= dist_remaining.y;
+			dist_remaining.z -= dist_remaining.y;
+
+			dist_remaining.y = dist_per.y;
+
+			if (pos.y + dir.y >= 128.f || pos.y + dir.y < 0.f) {
+				return -1;
+			}
+
+			int index = PTI(roundf(pos.x) + 0.5f, roundf(pos.y + dir2.y) + 0.5f, roundf(pos.z) + 0.5f);
+			if (g.voxels[index]) {
+				*hit_pos = (vec){
+					.x = 0.1f + roundf(pos.x),
+					.y = 0.1f + pos.y - dir2.y,
+					.z = 0.1f + roundf(pos.z),
+				};
+				printf("Hit: (%.02f, %.02f, %.02f)\n", hit_pos->x, hit_pos->y, hit_pos->z);
+				return index;
+			}
+		} else {
+			pos.x += look_dir.x * dist_remaining.z;
+			pos.y += look_dir.y * dist_remaining.z;
+			pos.z += look_dir.z * dist_remaining.z;
+
+			dist_remaining.x -= dist_remaining.z;
+			dist_remaining.y -= dist_remaining.z;
+
+			dist_remaining.z = dist_per.z;
+
+			if (pos.z + dir.z > 128.f || pos.z + dir.z < 0.f) {
+				return -1;
+			}
+
+			int index = PTI(roundf(pos.x) + 0.5f, roundf(pos.y) + 0.5f, roundf(pos.z + dir2.z) + 0.5f);
+			if (g.voxels[index]) {
+				*hit_pos = (vec){
+					.x = 0.1f + roundf(pos.x),
+					.y = 0.1f + roundf(pos.y),
+					.z = 0.1f + pos.z - dir2.z,
+				};
+				printf("Hit: (%.02f, %.02f, %.02f)\n", hit_pos->x, hit_pos->y, hit_pos->z);
+				return index;
+			}
+		}
+	}
+}
+
 void traceViewPath(const uint face)
 {
     g.pb.w = -1.f; // pre-set as failed
-    vec rp;
-    lray = ray(&ghp, &rp, ipp);
+//    vec rp;
+    lray = ray(&ghp, ipp);
     //printf("tVP: %u: %f %f %f - %f %f %f\n", lray, ghp.x, ghp.y, ghp.z, ipp.x, ipp.y, ipp.z);
     if(lray > -1 && face == 1)
     {
-        vNorm(&rp);
-        vec diff = rp;
-        rp = ghp;
+//        vNorm(&rp);
+//        vec diff = rp;
+//        rp = ghp;
 
-        vec fd = diff;
-        fd.x = fabsf(diff.x);
-        fd.y = fabsf(diff.y);
-        fd.z = fabsf(diff.z);
-        if     (fd.x > fd.y && fd.x > fd.z){diff.y = 0.f, diff.z = 0.f;}
-        else if(fd.y > fd.x && fd.y > fd.z){diff.x = 0.f, diff.z = 0.f;}
-        else if(fd.z > fd.x && fd.z > fd.y){diff.x = 0.f, diff.y = 0.f;}
-        diff.x = roundf(diff.x);
-        diff.y = roundf(diff.y);
-        diff.z = roundf(diff.z);
-
-        rp.x += diff.x;
-        rp.y += diff.y;
-        rp.z += diff.z;
-
-        if(vSumAbs(diff) == 1.f)
-        {
-            g.pb = rp;
+//        vec fd = diff;
+//        fd.x = fabsf(diff.x);
+//        fd.y = fabsf(diff.y);
+//        fd.z = fabsf(diff.z);
+//        if     (fd.x > fd.y && fd.x > fd.z){diff.y = 0.f, diff.z = 0.f;}
+//        else if(fd.y > fd.x && fd.y > fd.z){diff.x = 0.f, diff.z = 0.f;}
+//        else if(fd.z > fd.x && fd.z > fd.y){diff.x = 0.f, diff.y = 0.f;}
+//        diff.x = roundf(diff.x);
+//        diff.y = roundf(diff.y);
+//        diff.z = roundf(diff.z);
+//
+//        rp.x += diff.x;
+//        rp.y += diff.y;
+//        rp.z += diff.z;
+//
+//        if(vSumAbs(diff) == 1.f)
+//        {
+            g.pb = ghp;
             g.pb.w = 1.f; // success
-        }
+//        }
     }
 }
 
