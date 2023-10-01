@@ -18,10 +18,10 @@ typedef struct
 } mat;
 
 void mIdent(mat *m);
-void mCopy(mat *restrict r, const mat *restrict v);
-void mMul(mat *restrict r, const mat *restrict a, const mat *restrict b);
-void mMulP(vec *restrict r, const mat *restrict a, const float x, const float y, const float z);
-void mMulV(vec *restrict r, const mat *restrict a, const vec v);
+void mCopy(mat *r, const mat *v);
+void mMul(mat *r, const mat *a, const mat *b);
+void mMulP(vec *r, const mat *a, const float x, const float y, const float z);
+void mMulV(vec *r, const mat *a, const vec v);
 void mScale(mat *r, const float x, const float y, const float z);
 void mTranslate(mat *r, const float x, const float y, const float z);
 void mRotate(mat *r, const float radians, float x, float y, float z); // rotate axis (rotate X to move Y up and down)
@@ -33,8 +33,8 @@ void mFrustum(mat *r, const float left, const float right, const float bottom, c
 void mPerspective(mat *r, const float fovy, const float aspect, const float nearZ, const float farZ);
 void mOrtho(mat *r, const float left, const float right, const float bottom, const float top, const float nearZ, const float farZ);
 void mLookAt(mat *r, const vec origin, const vec unit_dir);
-void mInvert(float *restrict dst, const float *restrict mat);
-void mTranspose(mat *restrict r, const mat *restrict m);
+void mInvert(float *dst, const float *mat);
+void mTranspose(mat *r, const mat *m);
 void mSetViewDir(mat *r, const vec dir_norm, const vec up_norm);
 void mGetViewDir(vec *r, const mat matrix);
 void mGetViewX(vec *r, const mat matrix);
@@ -59,12 +59,12 @@ void mIdent(mat *m)
     m->m[3][3] = 1.0f;
 }
 
-void mCopy(mat *restrict r, const mat *restrict v)
+void mCopy(mat *r, const mat *v)
 {
     memcpy(r, v, sizeof(mat));
 }
 
-void mMul(mat *restrict r, const mat *restrict a, const mat *restrict b)
+void mMul(mat *r, const mat *a, const mat *b)
 {
     mat tmp;
     for(int i = 0; i < 4; i++)
@@ -92,7 +92,7 @@ void mMul(mat *restrict r, const mat *restrict a, const mat *restrict b)
     memcpy(r, &tmp, sizeof(mat));
 }
 
-void mMulP(vec *restrict r, const mat *restrict a, const float x, const float y, const float z)
+void mMulP(vec *r, const mat *a, const float x, const float y, const float z)
 {
     r->x =  (a->m[0][0] * x) +
             (a->m[0][1] * x) +
@@ -110,7 +110,7 @@ void mMulP(vec *restrict r, const mat *restrict a, const float x, const float y,
             (a->m[2][3] * z) ;
 }
 
-void mMulV(vec *restrict r, const mat *restrict a, const vec v)
+void mMulV(vec *r, const mat *a, const vec v)
 {
     r->x =  (a->m[0][0] * v.x) +
             (a->m[0][1] * v.x) +
@@ -399,7 +399,7 @@ void mLookAt(mat *r, const vec origin, const vec unit_dir)
     r->m[3][2] = origin.z;
 }
 
-void mInvert(float *restrict dst, const float *restrict mat)
+void mInvert(float *dst, const float *mat)
 {
     // original source: ftp://download.intel.com/design/PentiumIII/sml/24504301.pdf
     // mirrored: https://github.com/esAux/esAux-Menger/raw/main/SIMD%20Matrix%20Inverse.pdf
@@ -490,7 +490,7 @@ void mInvert(float *restrict dst, const float *restrict mat)
     for(int j = 0; j < 16; j++){dst[j] *= det;}
 }
 
-void mTranspose(mat *r, const mat *restrict m)
+void mTranspose(mat *r, const mat *m)
 {
     r->m[0][0] = m->m[0][0];
     r->m[1][0] = m->m[0][1];
