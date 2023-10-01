@@ -190,10 +190,68 @@ int oldray(vec* hit_pos, vec* hit_vec, const vec start_pos) // the look vector i
 }
 
 int ray(vec* hit_pos, vec pos) // look vector is still a global, not going to mess with that for now
-{ // WARNING: currently only works when pos is within the world, TODO: remove this limitation
-	if (pos.x < 0.f || pos.x > 127.f || pos.y < 0.f || pos.y > 127.f || pos.z < 0.f || pos.z > 127.f) {
-		return -1;
+{
+	if (pos.x < -0.7f || pos.x > 127.7f || pos.y < -0.7f || pos.y > 127.7f || pos.z < -0.7f || pos.z > 127.7f) { // find how far it'd take to get into the world, if not in it in the first place
+		vec maxdist;
+		if (pos.x < -0.7f) { // floating point inaccuracies are fun (not)
+			maxdist.x = -((pos.x + 0.6f) / look_dir.x); // 0.1f away from the edge of the first block
+			if (maxdist.x < 0.f) {
+				return -1;
+			}
+		} else if (pos.x > 127.7f) {
+			maxdist.x = -((pos.x - 127.6f) / look_dir.x);
+			if (maxdist.x < 0.f) {
+				return -1;
+			}
+		} else {
+			maxdist.x = 0.f;
+		}
+
+		if (pos.y < -0.7f) {
+			maxdist.y = -((pos.y + 0.6f) / look_dir.y);
+			if (maxdist.y < 0.f) {
+				return -1;
+			}
+		} else if (pos.y > 127.7f) {
+			maxdist.y = -((pos.y - 127.6f) / look_dir.y);
+			if (maxdist.y < 0.f) {
+				return -1;
+			}
+		} else {
+			maxdist.y = 0.f;
+		}
+
+		if (pos.z < -0.7f) {
+			maxdist.z = -((pos.z + 0.6f) / look_dir.z);
+			if (maxdist.x < 0.f) {
+				return -1;
+			}
+		} else if (pos.z > 127.7f) {
+			maxdist.z = -((pos.z - 127.6f) / look_dir.z);
+			if (maxdist.z < 0.f) {
+				return -1;
+			}
+		} else {
+			maxdist.z = 0.f;
+		}
+
+		maxdist.w = maxdist.x;
+		if (maxdist.w < maxdist.y) {
+			maxdist.w = maxdist.y;
+		}
+		if (maxdist.w < maxdist.z) {
+			maxdist.w = maxdist.z;
+		}
+
+		pos.x += maxdist.w * look_dir.x;
+		pos.y += maxdist.w * look_dir.y;
+		pos.z += maxdist.w * look_dir.z;
+
+		if (pos.x < -0.7f || pos.x > 127.7f || pos.y < -0.7f || pos.y > 127.7f || pos.z < -0.7f || pos.z > 127.7f) { // in getting them within, another went out... and going further certainly won't put it back in
+			return -1;
+		}
 	}
+
 
 	vec dir = {
 		.x = look_dir.x >= 0 ? 1 : -1,
@@ -236,7 +294,7 @@ int ray(vec* hit_pos, vec pos) // look vector is still a global, not going to me
 
 			dist_remaining.x = dist_per.x;
 
-			if (pos.x + dir.x >= 128.f || pos.x + dir.x < 0.f) {
+			if (pos.x + dir.x > 127.f || pos.x + dir.x < 0.f) { // max valid going +x: 126.5, min -x: 0.5; max +x: 127.5, min -x: -0.5
 				return -1;
 			}
 
