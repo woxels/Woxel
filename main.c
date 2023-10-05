@@ -442,9 +442,16 @@ void main_loop()
                                 WOX_QUIT();
                                 break;
                             }
-                            else if(mx < 28)
+                            else if(mx < 24)
                             {
                                 SDL_MinimizeWindow(wnd);
+                                break;
+                            }
+                            else if(mx < 40)
+                            {
+                                maxed = 1 - maxed;
+                                if(maxed == 1){SDL_MaximizeWindow(wnd);}
+                                else{SDL_RestoreWindow(wnd);}
                                 break;
                             }
                             else if(mx > winw-14)
@@ -452,9 +459,16 @@ void main_loop()
                                 WOX_QUIT();
                                 break;
                             }
-                            else if(mx > winw-28)
+                            else if(mx > winw-24)
                             {
                                 SDL_MinimizeWindow(wnd);
+                                break;
+                            }
+                            else if(mx > winw-40)
+                            {
+                                maxed = 1 - maxed;
+                                if(maxed == 1){SDL_MaximizeWindow(wnd);}
+                                else{SDL_RestoreWindow(wnd);}
                                 break;
                             }
 
