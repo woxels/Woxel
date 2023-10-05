@@ -72,22 +72,6 @@ void main_loop()
     }
 
     // window decor stuff
-    if(drag == 1)
-    {
-        static int lx=0, ly=0;
-        static float lt = 0;
-        if(t > lt)
-        {
-            if(lx != mx || ly != my)
-            {
-                int x,y;
-                SDL_GetWindowPosition(wnd, &x, &y);
-                SDL_SetWindowPosition(wnd, x+(mx-dsx), y+(my-dsy));
-                lx = mx, ly = my;
-            }
-            lt = t+0.03f;
-        }
-    }
     if(size == 1)
     {
         static float lt = 0;
@@ -99,7 +83,7 @@ void main_loop()
             winh = h+(my-dsy);
             dsx = mx;
             dsy = my;
-            if(winw > 380 && winh > 380)
+            if(winw > 420 && winh > 380)
             {
                 SDL_SetWindowSize(wnd, winw, winh);
                 winw2 = winw/2;
@@ -404,9 +388,8 @@ void main_loop()
             {
                 if(event.button.button == SDL_BUTTON_LEFT)
                 {
-                    if(drag == 1 || size == 1)
+                    if(size == 1)
                     {
-                        drag=0;
                         size=0;
                         SDL_GetWindowSize(wnd, &winw, &winh);
                         WOX_POP(winw, winh);
@@ -438,7 +421,6 @@ void main_loop()
                             {
                                 SDL_MaximizeWindow(wnd);
                                 maxed = 1;
-                                drag = 0;
                                 size = 0;
                                 llct = t;
                                 break;
@@ -447,7 +429,6 @@ void main_loop()
                             {
                                 SDL_RestoreWindow(wnd);
                                 maxed = 0;
-                                drag = 0;
                                 size = 0;
                                 llct = t;
                                 break;
@@ -478,8 +459,6 @@ void main_loop()
                             }
 
                             dsx = mx, dsy = my;
-                            drag=1;
-                            SDL_CaptureMouse(SDL_TRUE);
                             break;
                         }
                         else if(mx > winw-15 && my > winh-15)
@@ -847,20 +826,59 @@ void drawHud(const uint type)
     SDL_FillRect(sHud, &sHud->clip_rect, 0x00000000);
     if(type == 0)
     {
+        // updated maxed state >:( wayland
+        const uint flags = SDL_GetWindowFlags(wnd);
+        if(flags & SDL_WINDOW_MAXIMIZED){maxed = 1;}else{maxed = 0;}
+
         // window title
-        SDL_FillRect(sHud, &(SDL_Rect){0, 0, winw, 19}, 0x22FFFFFF);
-        const uint len = lenText("Woxel.xyz"); 
-        drawText(sHud, "Woxel.xyz", winw2-25, 4, 3);
-        drawText(sHud, "X -", 4, 4, 3);
-        drawText(sHud, "- X", winw-22, 4, 3);
-        SDL_FillRect(sHud, &(SDL_Rect){winw-15, winh-15, 15, 15}, 0x22FFFFFF);
+        SDL_FillRect(sHud, &(SDL_Rect){0, 0, winw, 19}, 0xDDFFFF00);
+        SDL_FillRect(sHud, &(SDL_Rect){1, 1, winw-2, 17}, 0xBB777700);
+        const uint len = lenText("Woxel");
+        drawText(sHud, "Woxel", winw2-24, 3, 3);
+        drawText(sHud, "Woxel", winw2-26, 3, 3);
+        drawText(sHud, "Woxel", winw2-25, 5, 3);
+        drawText(sHud, "Woxel", winw2-25, 4, 0);
+        drawText(sHud, "X -", 5, 4, 3);
+        drawText(sHud, "X -", 4, 5, 0);
+        if(maxed == 0)
+        {
+            SDL_FillRect(sHud, &(SDL_Rect){25, 3, 11, 11}, 0xFF00BFFF);
+            SDL_FillRect(sHud, &(SDL_Rect){24, 4, 11, 11}, 0xFF000000);
+            SDL_FillRect(sHud, &(SDL_Rect){25, 5, 9, 9}, 0xBB777700);
+        }
+        else
+        {
+            SDL_FillRect(sHud, &(SDL_Rect){24, 4, 11, 11}, 0xFF00BFFF);
+            SDL_FillRect(sHud, &(SDL_Rect){23, 3, 11, 11}, 0xFF000000);
+            SDL_FillRect(sHud, &(SDL_Rect){24, 4, 9, 9}, 0xBB777700);
+        }
+        drawText(sHud, "- X", winw-23, 4, 3);
+        drawText(sHud, "- X", winw-22, 5, 0);
+        if(maxed == 0)
+        {
+            SDL_FillRect(sHud, &(SDL_Rect){winw-38, 3, 11, 11}, 0xFF00BFFF);
+            SDL_FillRect(sHud, &(SDL_Rect){winw-37, 4, 11, 11}, 0xFF000000);
+            SDL_FillRect(sHud, &(SDL_Rect){winw-36, 5, 9, 9}, 0xBB777700);
+        }
+        else
+        {
+            SDL_FillRect(sHud, &(SDL_Rect){winw-37, 4, 11, 11}, 0xFF00BFFF);
+            SDL_FillRect(sHud, &(SDL_Rect){winw-36, 3, 11, 11}, 0xFF000000);
+            SDL_FillRect(sHud, &(SDL_Rect){winw-35, 4, 9, 9}, 0xBB777700);
+        }
+        SDL_FillRect(sHud, &(SDL_Rect){winw-15, winh-15, 15, 15}, 0xDDFFFF00);
+        SDL_FillRect(sHud, &(SDL_Rect){winw-14, winh-14, 13, 13}, 0xBB777700);
         drawText(sHud, "r", winw-9, winh-13, 3);
+        drawText(sHud, "r", winw-10, winh-14, 0);
+
+        SDL_FillRect(sHud, &(SDL_Rect){40, 3, winw2-85, 13}, 0xDDa0b010);
+        SDL_FillRect(sHud, &(SDL_Rect){winw2+30, 3, winw2-72, 13}, 0xDDa0b010);
 
         // fps
         char tmp[16];
         sprintf(tmp, "%u", g_fps);
-        SDL_FillRect(sHud, &(SDL_Rect){0, 22, lenText(tmp)+8, 19}, 0xCC000000);
-        drawText(sHud, tmp, 4, 26, 2);
+        SDL_FillRect(sHud, &(SDL_Rect){0, 19, lenText(tmp)+8, 19}, 0xCC000000);
+        drawText(sHud, tmp, 4, 23, 2);
         // center hud
         const int left = winw2-177;
         int top = winh2-152;
@@ -1501,6 +1519,9 @@ int main(int argc, char** argv)
         printf("ERROR: SDL_GL_CreateContext(): %s\n", SDL_GetError());
         return 1;
     }
+
+    // callback for custom decor
+    SDL_SetWindowHitTest(wnd, hitTest, NULL);
 
     // set icon
     s_icon = surfaceFromData((Uint32*)&icon, 16, 16);
