@@ -53,7 +53,7 @@ int winw = 1024, winh = 768;
 int winw2 = 512, winh2 = 384;
 float ww, wh;
 float aspect, t = 0.f;
-uint drag=0,size=0,dsx=0,dsy=0;
+uint maxed=0,size=0,dsx=0,dsy=0;
 uint g_fps = 0;
 uint ks[10] = {0};      // keystate
 uint focus_mouse = 0;   // mouse lock
@@ -446,6 +446,13 @@ void loadColors(const char* file)
         timestamp(tmp);
         printf("[%s] Custom color palette applied to project \"%s\".\n", tmp, openTitle);
     }
+}
+static SDL_HitTestResult SDLCALL hitTest(SDL_Window *window, const SDL_Point *pt, void *data)
+{
+    if( SDL_PointInRect(pt, &(SDL_Rect){40, 0, winw2-85, 22}) == SDL_TRUE ||
+        SDL_PointInRect(pt, &(SDL_Rect){winw2+60, 0, winw2-102, 22}) == SDL_TRUE)
+        return SDL_HITTEST_DRAGGABLE;
+    return SDL_HITTEST_NORMAL;
 }
 
 //*************************************
