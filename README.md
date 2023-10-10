@@ -8,7 +8,7 @@ Woxel uses intuitive controls akin to Minetest and Minecraft, while providing a 
 📱 Follow us on Twitter! https://twitter.com/Woxels
 
 ## Download
-* 🔗 **Flatpak:** https://flathub.org/apps/xyz.woxel.Woxel *(no libdecor on Wayland)*
+* 🔗 **Flatpak:** https://flathub.org/apps/xyz.woxel.Woxel
 * 🔗 **Snapcraft:** https://snapcraft.io/woxel
 * 🔗 **Ubuntu:** https://github.com/woxels/Woxel/releases
 * 🔗 **WebGL:** https://woxel.xyz / https://woxels.github.io
