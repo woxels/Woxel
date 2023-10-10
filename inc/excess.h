@@ -1,7 +1,8 @@
 /*
 --------------------------------------------------
     James William Fletcher (github.com/mrbid)
-        August 2023
+         & Test_User       (notabug.org/test_user)
+            August 2023
 --------------------------------------------------
     C & SDL / OpenGL ES2 / GLSL ES
     Colour Converter: https://www.easyrgb.com
@@ -15,7 +16,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengles2.h>
 
-#ifdef __linux__
+#ifndef _WIN32
     #include <sys/time.h>
     #include <locale.h>
 #endif
@@ -32,7 +33,10 @@ GLint view_id;
 GLint position_id;
 GLint voxel_id;
 GLint texcoord_id;
-GLint sampler_id;
+GLint hud_id;
+GLint look_pos_id;
+GLint scale_id;
+GLint voxels_id;
 
 // render state matrices
 mat projection;
@@ -42,18 +46,18 @@ mat view;
 // globals
 //*************************************
 const char appTitle[] = "Woxel"; // or loxel?
-const char appVersion[] = "v1.3";
+const char appVersion[] = "v1.4";
 char openTitle[256]="Untitled";
 char *basedir, *appdir;
 SDL_Window* wnd;
 SDL_GLContext glc;
 SDL_Surface* s_icon = NULL;
-int mx=0, my=0, xd=0, yd=0;
+int mx=0, my=0, xd=0, yd=0, lx=0, ly=0;
 int winw = 1024, winh = 768;
 int winw2 = 512, winh2 = 384;
 float ww, wh;
 float aspect, t = 0.f;
-uint maxed=0,size=0,dsx=0,dsy=0;
+uint wayland=0,maxed=0,size=0,dsx=0,dsy=0;
 uint g_fps = 0;
 uint ks[10] = {0};      // keystate
 uint focus_mouse = 0;   // mouse lock
@@ -72,6 +76,11 @@ Uint32 sclr = 0;        // selected color
 uint load_state = 0;    // loaded from appdir or custom path?
 uint mirror = 0;        // mirror brush state
 vec ghp;                // global ray hit position
+uint has_changed = 1;   // do the render buffers need re-building?
+float wti = 0.f;        // warning message timer for system colors tooltip
+char warnm[256];        // warning message string
+
+float xscale, yscale;
 
 //*************************************
 // game state functions
@@ -160,99 +169,8 @@ int PTIB2(const char x, const char y, const char z)
 //*************************************
 // ray functions
 //*************************************/
-int oldray(vec* hit_pos, vec* hit_vec, const vec start_pos) // the look vector is a global
-{
-    // might need exclude conditions for obviously bogus rays to avoid those 2048 steps
-    vec inc;
-    vMulS(&inc, look_dir, 0.015625f); // 0.0625f
-    int hit = -1;
-    vec rp = start_pos;
-    for(uint i = 0; i < 8192; i++) // 2048
-    {
-        vAdd(&rp, rp, inc);
-        if(isInBounds(rp) == 0){continue;} // break;
-        vec rb;
-        rb.x = roundf(rp.x);
-        rb.y = roundf(rp.y);
-        rb.z = roundf(rp.z);
-        const uint vi = PTI(rb.x, rb.y, rb.z);
-        //printf("ray: %u: %f %f %f\n", vi, rb.x, rb.y, rb.z);
-        if(g.voxels[vi] != 0)
-        {
-            *hit_vec = (vec){rp.x-rb.x, rp.y-rb.y, rp.z-rb.z};
-            *hit_pos = (vec){rb.x, rb.y, rb.z};
-            hit = vi;
-            break;
-        }
-        if(hit > -1){break;}
-    }
-    return hit;
-}
-
 int ray(vec* hit_pos, vec pos) // look vector is still a global, not going to mess with that for now
 {
-	if (pos.x < -0.7f || pos.x > 127.7f || pos.y < -0.7f || pos.y > 127.7f || pos.z < -0.7f || pos.z > 127.7f) { // find how far it'd take to get into the world, if not in it in the first place
-		vec maxdist;
-		if (pos.x < -0.7f) { // floating point inaccuracies are fun (not)
-			maxdist.x = -((pos.x + 0.6f) / look_dir.x); // 0.1f away from the edge of the first block
-			if (maxdist.x < 0.f) {
-				return -1;
-			}
-		} else if (pos.x > 127.7f) {
-			maxdist.x = -((pos.x - 127.6f) / look_dir.x);
-			if (maxdist.x < 0.f) {
-				return -1;
-			}
-		} else {
-			maxdist.x = 0.f;
-		}
-
-		if (pos.y < -0.7f) {
-			maxdist.y = -((pos.y + 0.6f) / look_dir.y);
-			if (maxdist.y < 0.f) {
-				return -1;
-			}
-		} else if (pos.y > 127.7f) {
-			maxdist.y = -((pos.y - 127.6f) / look_dir.y);
-			if (maxdist.y < 0.f) {
-				return -1;
-			}
-		} else {
-			maxdist.y = 0.f;
-		}
-
-		if (pos.z < -0.7f) {
-			maxdist.z = -((pos.z + 0.6f) / look_dir.z);
-			if (maxdist.x < 0.f) {
-				return -1;
-			}
-		} else if (pos.z > 127.7f) {
-			maxdist.z = -((pos.z - 127.6f) / look_dir.z);
-			if (maxdist.z < 0.f) {
-				return -1;
-			}
-		} else {
-			maxdist.z = 0.f;
-		}
-
-		maxdist.w = maxdist.x;
-		if (maxdist.w < maxdist.y) {
-			maxdist.w = maxdist.y;
-		}
-		if (maxdist.w < maxdist.z) {
-			maxdist.w = maxdist.z;
-		}
-
-		pos.x += maxdist.w * look_dir.x;
-		pos.y += maxdist.w * look_dir.y;
-		pos.z += maxdist.w * look_dir.z;
-
-		if (pos.x < -0.7f || pos.x > 127.7f || pos.y < -0.7f || pos.y > 127.7f || pos.z < -0.7f || pos.z > 127.7f) { // in getting them within, another went out... and going further certainly won't put it back in
-			return -1;
-		}
-	}
-
-
 	vec dir = {
 		.x = look_dir.x >= 0 ? 1 : -1,
 		.y = look_dir.y >= 0 ? 1 : -1,
@@ -277,13 +195,122 @@ int ray(vec* hit_pos, vec pos) // look vector is still a global, not going to me
 		.z = (((dir.z + 1.f) / 2.f) - ((pos.z + 0.5f) - floorf(pos.z  + 0.5f))) / look_dir.z,
 	};
 
-	// printf("Look dir: (%.02f, %.02f, %.02f)\n", look_dir.x, look_dir.y, look_dir.z);
-	// printf("Pos: (%.02f, %.02f, %.02f)\n", pos.x, pos.y, pos.z);
+
+	if (pos.x < -0.5f || pos.x > 127.5f || pos.y < -0.5f || pos.y > 127.5f || pos.z < -0.5f || pos.z > 127.5f) { // find how far it'd take to get into the world, if not in it in the first place
+		vec maxdist;
+		if (pos.x < -0.5f) {
+			maxdist.x = -((pos.x + 0.5f) / look_dir.x);
+			if (maxdist.x < 0.f) {
+				return -1;
+			}
+		} else if (pos.x > 127.5f) {
+			maxdist.x = -((pos.x - 127.5f) / look_dir.x);
+			if (maxdist.x < 0.f) {
+				return -1;
+			}
+		} else {
+			maxdist.x = 0.f;
+		}
+
+		if (pos.y < -0.5f) {
+			maxdist.y = -((pos.y + 0.5f) / look_dir.y);
+			if (maxdist.y < 0.f) {
+				return -1;
+			}
+		} else if (pos.y > 127.7f) {
+			maxdist.y = -((pos.y - 127.5f) / look_dir.y);
+			if (maxdist.y < 0.f) {
+				return -1;
+			}
+		} else {
+			maxdist.y = 0.f;
+		}
+
+		if (pos.z < -0.5f) {
+			maxdist.z = -((pos.z + 0.5f) / look_dir.z);
+			if (maxdist.x < 0.f) {
+				return -1;
+			}
+		} else if (pos.z > 127.7f) {
+			maxdist.z = -((pos.z - 127.5f) / look_dir.z);
+			if (maxdist.z < 0.f) {
+				return -1;
+			}
+		} else {
+			maxdist.z = 0.f;
+		}
+
+		maxdist.w = maxdist.x;
+		if (maxdist.w < maxdist.y) {
+			maxdist.w = maxdist.y;
+		}
+		if (maxdist.w < maxdist.z) {
+			maxdist.w = maxdist.z;
+		}
+
+		pos.x += maxdist.w * look_dir.x;
+		pos.y += maxdist.w * look_dir.y;
+		pos.z += maxdist.w * look_dir.z;
+
+		dist_remaining = (vec){
+			.x = (((dir.x + 1.f) * 0.5f) - ((pos.x + 0.5f) - floorf(pos.x + 0.5f))) / look_dir.x,
+			.y = (((dir.y + 1.f) * 0.5f) - ((pos.y + 0.5f) - floorf(pos.y + 0.5f))) / look_dir.y,
+			.z = (((dir.z + 1.f) * 0.5f) - ((pos.z + 0.5f) - floorf(pos.z + 0.5f))) / look_dir.z,
+		};
+
+		if (maxdist.w == maxdist.x) {
+			if (pos.y < -0.5f || pos.y > 127.5f || pos.z < -0.5f || pos.z > 127.5f) { // floating point inaccuracies are fun... hopefully this won't go wrong, if it does well... user can just move
+				return -1;
+			}
+
+			dist_remaining.x = dist_per.x;
+
+			int index = PTI(pos.x + dir2.x + 0.5f, pos.y + 0.5f, pos.z + 0.5f);
+			if (g.voxels[index]) {
+				*hit_pos = (vec){
+					.x = 0.1f + pos.x - dir2.x,
+					.y = 0.1f + roundf(pos.y),
+					.z = 0.1f + roundf(pos.z)
+				};
+				return index;
+			}
+		} else if (maxdist.w == maxdist.y) {
+			if (pos.x < -0.5f || pos.x > 127.5f || pos.z < -0.5f || pos.z > 127.5f) {
+				return -1;
+			}
+
+			dist_remaining.y = dist_per.y;
+
+			int index = PTI(pos.x + 0.5f, pos.y + dir2.y + 0.5f, pos.z + 0.5f);
+			if (g.voxels[index]) {
+				*hit_pos = (vec){
+					.x = 0.1f + roundf(pos.x),
+					.y = 0.1f + pos.y - dir2.y,
+					.z = 0.1f + roundf(pos.z)
+				};
+				return index;
+			}
+		} else {
+			if (pos.x < -0.5f || pos.x > 127.5f || pos.y < -0.5f || pos.y > 127.5f) {
+				return -1;
+			}
+
+			dist_remaining.z = dist_per.z;
+
+			int index = PTI(pos.x + 0.5f, pos.y + 0.5f, pos.z + dir2.z + 0.5f);
+			if (g.voxels[index]) {
+				*hit_pos = (vec){
+					.x = 0.1f + roundf(pos.x),
+					.y = 0.1f + roundf(pos.y),
+					.z = 0.1f + pos.z - dir2.z
+				};
+				return index;
+			}
+		}
+	}
+
 
 	while (1) {
-		// printf("Distance remaining: (%.02f, %.02f, %.02f)\n", dist_remaining.x, dist_remaining.y, dist_remaining.z);
-		// printf("Absolute distance remaining: (%.02f, %.02f, %.02f)\n", dist_remaining.x * look_dir.x, dist_remaining.y * look_dir.y, dist_remaining.z * look_dir.z);
-
 		if (dist_remaining.x < dist_remaining.y && dist_remaining.x < dist_remaining.z) {
 			pos.x += look_dir.x * dist_remaining.x;
 			pos.y += look_dir.y * dist_remaining.x;
@@ -298,7 +325,7 @@ int ray(vec* hit_pos, vec pos) // look vector is still a global, not going to me
 				return -1;
 			}
 
-			int index = PTI(roundf(pos.x + dir2.x) + 0.5f, roundf(pos.y) + 0.5f, roundf(pos.z) + 0.5f);
+			int index = PTI(pos.x + dir2.x + 0.5f, pos.y + 0.5f, pos.z + 0.5f);
 			if (g.voxels[index]) {
 				*hit_pos = (vec){
 					.x = 0.1f + pos.x - dir2.x,
@@ -318,11 +345,11 @@ int ray(vec* hit_pos, vec pos) // look vector is still a global, not going to me
 
 			dist_remaining.y = dist_per.y;
 
-			if (pos.y + dir.y >= 128.f || pos.y + dir.y < 0.f) {
+			if (pos.y + dir.y > 127.7f || pos.y + dir.y < -0.7f) {
 				return -1;
 			}
 
-			int index = PTI(roundf(pos.x) + 0.5f, roundf(pos.y + dir2.y) + 0.5f, roundf(pos.z) + 0.5f);
+			int index = PTI(pos.x + 0.5f, pos.y + dir2.y + 0.5f, pos.z + 0.5f);
 			if (g.voxels[index]) {
 				*hit_pos = (vec){
 					.x = 0.1f + roundf(pos.x),
@@ -342,11 +369,11 @@ int ray(vec* hit_pos, vec pos) // look vector is still a global, not going to me
 
 			dist_remaining.z = dist_per.z;
 
-			if (pos.z + dir.z > 128.f || pos.z + dir.z < 0.f) {
+			if (pos.z + dir.z > 127.7f || pos.z + dir.z < -0.7f) {
 				return -1;
 			}
 
-			int index = PTI(roundf(pos.x) + 0.5f, roundf(pos.y) + 0.5f, roundf(pos.z + dir2.z) + 0.5f);
+			int index = PTI(pos.x + 0.5f, pos.y + 0.5f, pos.z + dir2.z + 0.5f);
 			if (g.voxels[index]) {
 				*hit_pos = (vec){
 					.x = 0.1f + roundf(pos.x),
@@ -359,39 +386,14 @@ int ray(vec* hit_pos, vec pos) // look vector is still a global, not going to me
 		}
 	}
 }
-
 void traceViewPath(const uint face)
 {
     g.pb.w = -1.f; // pre-set as failed
-//    vec rp;
     lray = ray(&ghp, ipp);
-    //printf("tVP: %u: %f %f %f - %f %f %f\n", lray, ghp.x, ghp.y, ghp.z, ipp.x, ipp.y, ipp.z);
     if(lray > -1 && face == 1)
     {
-//        vNorm(&rp);
-//        vec diff = rp;
-//        rp = ghp;
-
-//        vec fd = diff;
-//        fd.x = fabsf(diff.x);
-//        fd.y = fabsf(diff.y);
-//        fd.z = fabsf(diff.z);
-//        if     (fd.x > fd.y && fd.x > fd.z){diff.y = 0.f, diff.z = 0.f;}
-//        else if(fd.y > fd.x && fd.y > fd.z){diff.x = 0.f, diff.z = 0.f;}
-//        else if(fd.z > fd.x && fd.z > fd.y){diff.x = 0.f, diff.y = 0.f;}
-//        diff.x = roundf(diff.x);
-//        diff.y = roundf(diff.y);
-//        diff.z = roundf(diff.z);
-//
-//        rp.x += diff.x;
-//        rp.y += diff.y;
-//        rp.z += diff.z;
-//
-//        if(vSumAbs(diff) == 1.f)
-//        {
-            g.pb = ghp;
-            g.pb.w = 1.f; // success
-//        }
+        g.pb = ghp;
+        g.pb.w = 1.f; // success
     }
 }
 
@@ -447,12 +449,40 @@ void loadColors(const char* file)
         printf("[%s] Custom color palette applied to project \"%s\".\n", tmp, openTitle);
     }
 }
-static SDL_HitTestResult SDLCALL hitTest(SDL_Window *window, const SDL_Point *pt, void *data)
+uint isWayland()
 {
-    if( SDL_PointInRect(pt, &(SDL_Rect){40, 0, winw2-85, 22}) == SDL_TRUE ||
-        SDL_PointInRect(pt, &(SDL_Rect){winw2+60, 0, winw2-102, 22}) == SDL_TRUE)
-        return SDL_HITTEST_DRAGGABLE;
-    return SDL_HITTEST_NORMAL;
+    // try this first and then actually check
+    if(strcmp(SDL_GetCurrentVideoDriver(), "wayland") == 0)
+        return 1;
+    // three tier check just to be sure
+    // we use global mouse state as it doesn't
+    // require a window to exist.
+    // as we need this check before creating a window.
+    int x1,y1,x2,y2;
+    SDL_GetGlobalMouseState(&x1, &y1);
+    //printf("a %i %i\n", x1, y1);
+    SDL_WarpMouseGlobal(x1+1, y1);
+    SDL_GetGlobalMouseState(&x2, &y2);
+    //printf("b %i %i\n", x2, y2);
+    if(x2 == x1+1){return 0;}
+    else
+    {
+        int x1,y1,x2,y2;
+        SDL_GetGlobalMouseState(&x1, &y1);
+        SDL_WarpMouseGlobal(x1, y1+1);
+        SDL_GetGlobalMouseState(&x2, &y2);
+        if(y2 == y1+1){return 0;}
+        else
+        {
+            int x1,y1,x2,y2;
+            SDL_GetGlobalMouseState(&x1, &y1);
+            SDL_WarpMouseGlobal(0,0);
+            SDL_GetGlobalMouseState(&x2, &y2);
+            if(y2 != 0 && x2 != 0){return 0;}
+            else{SDL_WarpMouseGlobal(x1, x2);}
+        }
+    }
+    return 1;
 }
 
 //*************************************
@@ -608,9 +638,6 @@ void doPerspective()
     hudmap = esLoadTextureA(winw, winh, sHud->pixels, 0);
     ww = (float)winw;
     wh = (float)winh;
-    mIdent(&projection);
-    mPerspective(&projection, 60.0f, ww / wh, 1.0f, vdist);
-    glUniformMatrix4fv(projection_id, 1, GL_FALSE, (float*)&projection.m[0][0]);
 }
 uint insideFrustum(const float x, const float y, const float z)
 {
@@ -697,8 +724,6 @@ int drawText(SDL_Surface* o, const char* s, Uint32 x, Uint32 y, Uint8 colour)
         // font_blue = SDL_RGBA32Surface(380, 11);
         // SDL_BlitSurface(font_black, &font_black->clip_rect, font_blue, &font_blue->clip_rect);
         // replaceColour(font_blue, font_blue->clip_rect, 0xFF000000, 0xFFFF0000);
-
-
     }
     if(s[0] == '*' && s[1] == 'K') // signal cleanup
     {
