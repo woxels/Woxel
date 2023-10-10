@@ -1,7 +1,10 @@
 /*
 --------------------------------------------------
     James William Fletcher (github.com/mrbid)
-        August 2023 - esVoxel.h v4.0
+         & Test_User 	   (notabug.org/test_user)
+        	August 2023
+
+	esVoxel.h v5.0 (glsl ray-tracing)
 --------------------------------------------------
 
     A pretty good color converter: https://www.easyrgb.com/en/convert.php
@@ -24,14 +27,23 @@
     Requires:
         - vec.h: https://gist.github.com/mrbid/77a92019e1ab8b86109bf103166bd04e
         - mat.h: https://gist.github.com/mrbid/cbc69ec9d99b0fda44204975fcbeae7c
-    
+
 */
 
 #ifndef AUX_H
 #define AUX_H
 
+#ifndef _WIN32
+	#include <unistd.h>
+#endif
+
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_opengles2.h>
+
 #include "vec.h"
 #include "mat.h"
+
+#pragma GCC diagnostic ignored "-Wunused-result"
 
 //*************************************
 // VOXEL STRUCTURE
@@ -42,16 +54,12 @@ typedef struct
     GLuint iid;	// index buff id
     GLuint tid;	// uv/st texcoord buff id
 } ESModel;
-const GLfloat voxel_vertices[] = {-0.5,0.5,0.5,0.5,-0.5,0.5,0.5,0.5,0.5,0.5,-0.5,0.5,-0.5,-0.5,-0.5,0.5,-0.5,-0.5,-0.5,-0.5,0.5,-0.5,0.5,-0.5,-0.5,-0.5,-0.5,0.5,0.5,-0.5,-0.5,-0.5,-0.5,-0.5,0.5,-0.5,0.5,0.5,0.5,0.5,-0.5,-0.5,0.5,0.5,-0.5,-0.5,0.5,0.5,0.5,0.5,-0.5,-0.5,0.5,-0.5,-0.5,-0.5,0.5,-0.5,-0.5,0.5,-0.5,0.5,0.5,0.5,-0.5,-0.5,0.5,-0.5,0.5,0.5,0.5,0.5,0.5,0.5,-0.5};
-const GLubyte voxel_indices[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,0,18,1,3,19,4,6,20,7,9,21,10,12,22,13,15,23,24};
-const GLsizeiptr voxel_numind = 36;
-ESModel mdlVoxel;
-
-const GLfloat hud_vertices[] = {-1,1,0,1,-1,0,1,1,0,-1,-1,0};
-const GLfloat hud_uvmap[] = {0,0, 1,1, 1,0, 0,1};
-const GLubyte hud_indices[] = {0,1,2,0,3,1};
+const GLfloat hud_vertices[] = {-1,1, -1,-1, 1,1, 1,-1,};
+const GLubyte hud_indices[] = {0,1,2,2,3,1};
 const GLsizeiptr hud_numind = 6;
 ESModel mdlPlane;
+SDL_Surface* sVoxel;
+GLuint voxelmap;
 SDL_Surface* sHud;
 GLuint hudmap;
 
@@ -59,15 +67,12 @@ GLuint hudmap;
 // SHADER
 //*************************************
 void makeHud();
-void shadeHud(GLint* position, GLint* texcoord, GLint* sampler);
+void shadeHud(GLint* position, GLint* hud, GLint* look_pos, GLint* scale, GLint* view, GLint* voxels);
 void flipHud()
 {
     glBindTexture(GL_TEXTURE_2D, hudmap);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, sHud->w, sHud->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, sHud->pixels);
 }
-
-void makeVoxel();
-void shadeVoxel(GLint* projection, GLint* view, GLint* position, GLint* voxel);
 
 //*************************************
 // UTILITY CODE
@@ -113,85 +118,304 @@ GLuint esLoadTextureA(const GLuint w, const GLuint h, const unsigned char* data,
     }
     return textureId;
 }
+GLuint esReLoadTextureA(const GLuint w, const GLuint h, const unsigned char* data, const GLuint linear)
+{
+    GLuint textureId;
+    glBindTexture(GL_TEXTURE_2D, textureId);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    if(linear == 0)
+    {
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    }
+    else
+    {
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    }
+    return textureId;
+}
 
 //*************************************
 // SHADER CODE
 //*************************************
 const GLchar* v0 =
-    "#version 100\n"
-    "attribute vec4 position;\n"
-    "attribute vec2 texcoord;\n"
-    "varying vec2 vtc;\n"
-    "void main()\n"
-    "{\n"
-        "vtc = texcoord;\n"
-        "gl_Position = position;\n"
-    "}\n";
+	"#version 100\n"
+	"attribute vec2 position;\n"
+
+	"uniform vec2 scale;\n"
+	"uniform vec3 view[3];\n"
+
+	"varying vec3 ray_dir;\n"
+	"varying vec2 screen_pos;\n"
+
+	"void main()\n"
+	"{\n"
+		"vec3 forward = view[2];\n"
+		"vec3 up      = view[1];\n"
+		"vec3 right   = view[0];\n"
+
+		"ray_dir = forward + (up*(position.y * scale.y)) + (right*(position.x * scale.x));\n"
+
+		"screen_pos = vec2((position.x * 0.5) + 0.5, ((-position.y) * 0.5) + 0.5);\n"
+		"gl_Position = vec4(position, 1.0, 1.0);\n"
+	"}\n";
 
 const GLchar* f0 =
-    "#version 100\n"
-    "precision mediump float;\n"
-    "varying vec2 vtc;\n"
-    "uniform sampler2D tex;\n"
-    "void main()\n"
-    "{\n"
-        "gl_FragColor = texture2D(tex, vtc);\n"
-    "}\n";
+	"#version 100\n"
+	"precision highp float;\n"
+
+	"varying vec3 ray_dir;\n"
+	"varying vec2 screen_pos;\n"
+
+	"uniform sampler2D voxels;\n" // no dynamic array indexing? fine, dynamic not-array indexing it is
+	"uniform sampler2D hud;\n"
+
+	"uniform vec3 look_pos;\n" // for where to start
+
+	"vec4 voxel_at(float z, float y, float x)\n"
+	"{\n"
+		"x = floor(x + 0.5);\n"
+		"y = floor(y + 0.5);\n"
+		"z = floor(z + 0.5);\n"
+
+		"float ysplithigh = floor(y / 16.0);\n" // can inverse 16.0 as well v
+		"float ysplitlow = y - (ysplithigh * 16.0);\n"
+
+		"vec2 index;\n"
+		"index.x = ((x * 8.0) + ysplithigh) / 1024.0;\n" // TODO: rm the division
+		"index.y = ((ysplitlow * 128.0) + z) / 2048.0;\n" // ^
+
+		"return texture2D(voxels, index);\n"
+	"}\n"
+
+	"void ray()\n"
+	"{\n"
+		"vec3 pos = look_pos;\n"
+		"vec4 maxdist;\n"
+		"int index;\n"
+
+		"vec3 dir = vec3("
+			"ray_dir.x >= 0.0 ? 1.0 : -1.0,"
+			"ray_dir.y >= 0.0 ? 1.0 : -1.0,"
+			"ray_dir.z >= 0.0 ? 1.0 : -1.0"
+		");\n"
+
+		"vec3 dir2 = vec3("
+			"dir.x * 0.5,"
+			"dir.y * 0.5,"
+			"dir.z * 0.5"
+		");\n"
+
+		"vec3 dist_per = vec3("
+			"dir.x / ray_dir.x,"
+			"dir.y / ray_dir.y,"
+			"dir.z / ray_dir.z"
+		");\n"
+
+		"vec3 dist_remaining = vec3(" // maybe move initialization to an else in this next section
+			"(((dir.x + 1.0) * 0.5) - ((pos.x + 0.5) - floor(pos.x  + 0.5))) / ray_dir.x,"
+			"(((dir.y + 1.0) * 0.5) - ((pos.y + 0.5) - floor(pos.y  + 0.5))) / ray_dir.y,"
+			"(((dir.z + 1.0) * 0.5) - ((pos.z + 0.5) - floor(pos.z  + 0.5))) / ray_dir.z"
+		");\n"
+
+		"if (pos.x < -0.5 || pos.x > 127.5 || pos.y < -0.5 || pos.y > 127.5 || pos.z < -0.5 || pos.z > 127.5) {\n"
+			"if (pos.x < -0.5) {\n"
+				"maxdist.x = -((pos.x + 0.5) / ray_dir.x);\n"
+				"if (maxdist.x < 0.0) {\n"
+					"gl_FragColor = vec4(screen_pos, 0.5, 1.0);\n"
+					"return;\n"
+				"}\n"
+			"} else if (pos.x > 127.5) {\n"
+				"maxdist.x = -((pos.x - 127.5) / ray_dir.x);\n"
+				"if (maxdist.x < 0.0) {\n"
+					"gl_FragColor = vec4(screen_pos, 0.5, 1.0);\n"
+					"return;\n"
+				"}\n"
+			"} else {\n"
+				"maxdist.x = 0.0;\n"
+			"}\n"
+
+			"if (pos.y < -0.5) {\n"
+				"maxdist.y = -((pos.y + 0.5) / ray_dir.y);\n"
+				"if (maxdist.y < 0.0) {\n"
+					"gl_FragColor = vec4(screen_pos, 0.5, 1.0);\n"
+					"return;\n"
+				"}\n"
+			"} else if (pos.y > 127.5) {\n"
+				"maxdist.y = -((pos.y - 127.5) / ray_dir.y);\n"
+				"if (maxdist.y < 0.0) {\n"
+					"gl_FragColor = vec4(screen_pos, 0.5, 1.0);\n"
+					"return;\n"
+				"}\n"
+			"} else {\n"
+				"maxdist.y = 0.0;\n"
+			"}\n"
+
+			"if (pos.z < -0.5) {\n"
+				"maxdist.z = -((pos.z + 0.5) / ray_dir.z);\n"
+				"if (maxdist.z < 0.0) {\n"
+					"gl_FragColor = vec4(screen_pos, 0.5, 1.0);\n"
+					"return;\n"
+				"}\n"
+			"} else if (pos.z > 127.5) {\n"
+				"maxdist.z = -((pos.z - 127.5) / ray_dir.z);\n"
+				"if (maxdist.z < 0.0) {\n"
+					"gl_FragColor = vec4(screen_pos, 0.5, 1.0);\n"
+					"return;\n"
+				"}\n"
+			"} else {\n"
+				"maxdist.z = 0.0;\n"
+			"}\n"
+
+			"maxdist.w = maxdist.x;\n"
+			"if (maxdist.w < maxdist.y) {\n"
+				"maxdist.w = maxdist.y;\n"
+			"}\n"
+			"if (maxdist.w < maxdist.z) {\n"
+				"maxdist.w = maxdist.z;\n"
+			"}\n"
+
+			"pos.x += maxdist.w * ray_dir.x;\n"
+			"pos.y += maxdist.w * ray_dir.y;\n"
+			"pos.z += maxdist.w * ray_dir.z;\n"
+
+			"dist_remaining = vec3("
+				"(((dir.x + 1.0) * 0.5) - ((pos.x + 0.5) - floor(pos.x  + 0.5))) / ray_dir.x,"
+				"(((dir.y + 1.0) * 0.5) - ((pos.y + 0.5) - floor(pos.y  + 0.5))) / ray_dir.y,"
+				"(((dir.z + 1.0) * 0.5) - ((pos.z + 0.5) - floor(pos.z  + 0.5))) / ray_dir.z"
+			");\n"
+
+			"if (maxdist.w == maxdist.x) {\n"
+				"if (pos.y < -0.5 || pos.y > 127.5 || pos.z < -0.5 || pos.z > 127.5) {\n" // edge cases, literally, might have issues with float inaccuracies, but they should be nearly impossible to reach...
+					"gl_FragColor = vec4(screen_pos, 0.0, 1.0);\n"
+					"return;\n"
+				"}\n"
+
+				"dist_remaining.x = dist_per.x;\n"
+
+				"vec4 color = voxel_at(pos.x + dir2.x, pos.y, pos.z);\n"
+				"if (color.a != 0.0) {\n"
+					"gl_FragColor = color;\n"
+					"return;\n"
+				"}\n"
+			"} else if (maxdist.w == maxdist.y) {\n"
+				"if (pos.x < -0.5 || pos.x > 127.5 || pos.z < -0.5 || pos.z > 127.5) {\n"
+					"gl_FragColor = vec4(screen_pos, 0.0, 1.0);\n"
+					"return;\n"
+				"}\n"
+
+				"dist_remaining.y = dist_per.y;\n"
+
+				"vec4 color = voxel_at(pos.x, pos.y + dir2.y, pos.z);\n"
+				"if (color.a != 0.0) {\n"
+					"gl_FragColor = color;\n"
+					"return;\n"
+				"}\n"
+			"} else {\n"
+				"if (pos.x < -0.5 || pos.x > 127.5 || pos.y < -0.5 || pos.y > 127.5) {\n"
+					"gl_FragColor = vec4(screen_pos, 0.0, 1.0);\n"
+					"return;\n"
+				"}\n"
+
+				"dist_remaining.z = dist_per.z;\n"
+
+				"vec4 color = voxel_at(pos.x, pos.y, pos.z + dir2.z);\n"
+				"if (color.a != 0.0) {\n"
+					"gl_FragColor = color;\n"
+					"return;\n"
+				"}\n"
+			"}\n"
+		"}\n"
+
+
+
+		"vec3 checkpos;\n"
+		"float multiplier;\n"
+		"for(int i = 0; i < 512; i++){\n"
+			"if (dist_remaining.x < dist_remaining.y && dist_remaining.x < dist_remaining.z) {\n"
+				"pos.x += ray_dir.x * dist_remaining.x;\n"
+				"pos.y += ray_dir.y * dist_remaining.x;\n"
+				"pos.z += ray_dir.z * dist_remaining.x;\n"
+
+				"dist_remaining.y -= dist_remaining.x;\n"
+				"dist_remaining.z -= dist_remaining.x;\n"
+
+				"dist_remaining.x = dist_per.x;\n"
+
+				"if (pos.x + dir.x > 127.7 || pos.x + dir.x < -0.7) {\n"
+					"gl_FragColor = vec4(screen_pos, 1.0, 1.0) * max((1.0-(distance(look_pos, pos) * 0.002590674)), 0.6);\n"
+					"return;\n"
+				"}\n"
+
+				"checkpos = vec3(pos.x + dir2.x, pos.y, pos.z);\n"
+				"multiplier = 0.9;\n"
+			"} else if (dist_remaining.y < dist_remaining.z) {\n"
+				"pos.x += ray_dir.x * dist_remaining.y;\n"
+				"pos.y += ray_dir.y * dist_remaining.y;\n"
+				"pos.z += ray_dir.z * dist_remaining.y;\n"
+
+				"dist_remaining.x -= dist_remaining.y;\n"
+				"dist_remaining.z -= dist_remaining.y;\n"
+
+				"dist_remaining.y = dist_per.y;\n"
+
+				"if (pos.y + dir.y > 127.7 || pos.y + dir.y < -0.7) {\n"
+					"gl_FragColor = vec4(screen_pos, 1.0, 1.0) * max((1.0-(distance(look_pos, pos) * 0.002590674)), 0.6);\n"
+					"return;\n"
+				"}\n"
+
+				"checkpos = vec3(pos.x, pos.y + dir2.y, pos.z);\n"
+				"multiplier = 1.0;\n"
+			"} else {\n"
+				"pos.x += ray_dir.x * dist_remaining.z;\n"
+				"pos.y += ray_dir.y * dist_remaining.z;\n"
+				"pos.z += ray_dir.z * dist_remaining.z;\n"
+
+				"dist_remaining.x -= dist_remaining.z;\n"
+				"dist_remaining.y -= dist_remaining.z;\n"
+
+				"dist_remaining.z = dist_per.z;\n"
+
+				"if (pos.z + dir.z > 127.7 || pos.z + dir.z < -0.7) {\n"
+					"gl_FragColor = vec4(screen_pos, 1.0, 1.0) * max((1.0-(distance(look_pos, pos) * 0.002590674)), 0.6);\n"
+					"return;\n"
+				"}\n"
+
+				"checkpos = vec3(pos.x, pos.y, pos.z + dir2.z);\n"
+				"multiplier = 0.8;\n"
+			"}\n"
+
+			"vec4 color = voxel_at(checkpos.x, checkpos.y, checkpos.z);\n"
+			"if (color.a != 0.0) {\n"
+				"gl_FragColor = color * multiplier;\n"
+				"return;\n"
+			"}\n"
+		"}\n"
+	"}\n"
+
+	"void main()\n"
+	"{\n"
+		"vec4 color = texture2D(hud, screen_pos);\n"
+		"if (color.a != 1.0) {\n"
+			"ray();\n"
+			"gl_FragColor.rgb = mix(gl_FragColor.rgb, color.rgb, color.a);\n"
+		"} else {\n"
+			"gl_FragColor = color;\n"
+		"}\n"
+	"}\n";
 
 ///
 
-const GLchar* v1 =
-    "#version 100\n"
-    "uniform mat4 view;\n"
-    "uniform mat4 projection;\n"
-    "uniform vec2 voxel;\n"
-    "attribute vec4 position;\n"
-    "varying vec3 color;\n"
-    "varying vec3 vp;\n"
-    "void main()\n"
-    "{\n"
-        "vec3 nc;\n" // https://stackoverflow.com/a/12553149
-        "nc.r = floor(voxel.y / 65536.0);\n" // * 0.00001525878
-        "nc.g = floor((voxel.y - nc.r * 65536.0) / 256.0);\n" // * 0.00390625
-        "nc.b = floor(voxel.y - nc.r * 65536.0 - nc.g * 256.0);\n"
-        "nc.r /= 256.0;\n" // *= 0.00390625
-        "nc.g /= 256.0;\n" // *= 0.00390625
-        "nc.b /= 256.0;\n" // *= 0.00390625 - no dropping accuracy on color is bad
-        "float w = voxel.x * 0.000061035156;\n"
-        "float z = floor(w);\n"
-        "float y = fract(w) * 128.0;\n"
-        "float x = fract(y) * 128.0;\n"
-        "mat4 model;\n"
-        "model[0] = vec4(1.0, 0.0, 0.0, 0.0);\n"
-        "model[1] = vec4(0.0, 1.0, 0.0, 0.0);\n"
-        "model[2] = vec4(0.0, 0.0, 1.0, 0.0);\n"
-        "model[3] = vec4(floor(x), floor(y), floor(z), 1.0);\n"
-        "mat4 modelview = view * model;\n"
-        "vec4 vertPos4 = modelview * position;\n"
-        "vec3 vertPos = vertPos4.xyz / vertPos4.w;\n"
-        "color = nc * clamp(1.0-(length(vertPos)*0.001), 0.0, 1.0);\n"
-        "vp = position.xyz;\n"
-        "gl_Position = projection * vertPos4;\n"
-    "}\n";
-
-const GLchar* f1 =
-    "#version 100\n"
-    "precision mediump float;\n"
-    "varying vec3 color;\n"
-    "varying vec3 vp;\n"
-    "void main()\n"
-    "{\n"
-        //"gl_FragColor = vec4(color, 1.0);\n"
-        //"gl_FragColor = vec4(color * (1.0-(length(vp)*0.2)), 1.0);\n"
-        "gl_FragColor = vec4(color * clamp(smoothstep(1.0, 0.7, length(vp)), 0.90, 1.0), 1.0);\n" // 0.96?
-    "}\n";
-
-//
-
 GLuint shdHud;
 GLint  shdHud_position;
-GLint  shdHud_texcoord;
-GLint  shdHud_sampler;
+GLint  shdHud_hud;
+GLint  shdHud_look_pos;
+GLint  shdHud_scale;
+GLint  shdHud_view;
+GLint  shdHud_voxels;
 
 GLuint shdVoxel;
 GLint  shdVoxel_projection;
@@ -201,50 +425,44 @@ GLint  shdVoxel_voxel;
 
 //
 
-void makeVoxel()
-{
-    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &v1, NULL);
-    glCompileShader(vertexShader);
-
-    GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &f1, NULL);
-    glCompileShader(fragmentShader);
-
-    shdVoxel = glCreateProgram();
-        glAttachShader(shdVoxel, vertexShader);
-        glAttachShader(shdVoxel, fragmentShader);
-    glLinkProgram(shdVoxel);
-
-    shdVoxel_position   = glGetAttribLocation(shdVoxel,  "position");
-    //<><><><><><><><><><><><><><><><><><><><><><><><><><><><><>
-    shdVoxel_projection = glGetUniformLocation(shdVoxel, "projection");
-    shdVoxel_view       = glGetUniformLocation(shdVoxel, "view");
-    shdVoxel_voxel      = glGetUniformLocation(shdVoxel, "voxel");
-
-    esBind(GL_ARRAY_BUFFER,         &mdlVoxel.vid, voxel_vertices, sizeof(voxel_vertices), GL_STATIC_DRAW);
-    esBind(GL_ELEMENT_ARRAY_BUFFER, &mdlVoxel.iid, voxel_indices,  sizeof(voxel_indices),  GL_STATIC_DRAW);
-}
-void shadeVoxel(GLint* projection, GLint* view, GLint* position, GLint* voxel)
-{
-    *projection = shdVoxel_projection;
-    *view = shdVoxel_view;
-    *position = shdVoxel_position;
-    *voxel = shdVoxel_voxel;
-    glUseProgram(shdVoxel);
-}
-
-//
-
 void makeHud()
 {
     GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertexShader, 1, &v0, NULL);
     glCompileShader(vertexShader);
 
+#ifdef __linux__
+    GLint compiled;
+    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &compiled);
+    if (compiled != GL_TRUE)
+    {
+        GLsizei log_length = 0;
+        GLchar message[1024*1024];
+        glGetShaderInfoLog(vertexShader, 1024*1024, &log_length, message);
+        write(2, "Vertex error: ", 14);
+        write(2, message, log_length);
+        write(2, "\r\n", 2);
+        exit(1);
+    }
+#endif
+
     GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragmentShader, 1, &f0, NULL);
     glCompileShader(fragmentShader);
+
+#ifdef __linux__
+    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &compiled);
+    if (compiled != GL_TRUE)
+    {
+        GLsizei log_length = 0;
+        GLchar message[1024*1024];
+        glGetShaderInfoLog(fragmentShader, 1024*1024, &log_length, message);
+        write(2, "Fragment error: ", 16);
+        write(2, message, log_length);
+        write(2, "\r\n", 2);
+        exit(1);
+    }
+#endif
 
     shdHud = glCreateProgram();
         glAttachShader(shdHud, vertexShader);
@@ -252,19 +470,24 @@ void makeHud()
     glLinkProgram(shdHud);
 
     shdHud_position   = glGetAttribLocation(shdHud,  "position");
-    shdHud_texcoord   = glGetAttribLocation(shdHud,  "texcoord");
     //<><><><><><><><><><><><><><><><><><><><><><><><><><><><><>
-    shdHud_sampler    = glGetUniformLocation(shdHud, "tex");
+    shdHud_voxels    = glGetUniformLocation(shdHud, "voxels");
+    shdHud_look_pos   = glGetUniformLocation(shdHud, "look_pos");
+    shdHud_scale      = glGetUniformLocation(shdHud, "scale");
+    shdHud_view       = glGetUniformLocation(shdHud, "view");
+    shdHud_hud       = glGetUniformLocation(shdHud, "hud");
 
     esBind(GL_ARRAY_BUFFER, &mdlPlane.vid, &hud_vertices, sizeof(hud_vertices), GL_STATIC_DRAW);
     esBind(GL_ELEMENT_ARRAY_BUFFER, &mdlPlane.iid, &hud_indices, sizeof(hud_indices), GL_STATIC_DRAW);
-    esBind(GL_ARRAY_BUFFER, &mdlPlane.tid, &hud_uvmap, sizeof(hud_uvmap), GL_STATIC_DRAW);
 }
-void shadeHud(GLint* position, GLint* texcoord, GLint* sampler)
+void shadeHud(GLint* position, GLint* hud, GLint* look_pos, GLint* scale, GLint* view, GLint* voxels)
 {
     *position = shdHud_position;
-    *texcoord = shdHud_texcoord;
-    *sampler = shdHud_sampler;
+    *hud = shdHud_hud;
+    *look_pos = shdHud_look_pos;
+    *scale = shdHud_scale;
+    *view = shdHud_view;
+    *voxels = shdHud_voxels;
     glUseProgram(shdHud);
 }
 
