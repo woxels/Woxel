@@ -1,7 +1,8 @@
 /*
 --------------------------------------------------
     James William Fletcher (github.com/mrbid)
-        August 2023
+         & Test_User       (notabug.org/test_user)
+            August 2023
 --------------------------------------------------
     C & SDL / OpenGL ES2 / GLSL ES
     Colour Converter: https://www.easyrgb.com
@@ -26,8 +27,24 @@ void WOX_POP(const int w, const int h)
     winh = h;
     winw2 = winw/2;
     winh2 = winh/2;
+    if (winw < winh) {
+        xscale = (float)winw/(float)winh;
+        yscale = 1.f;
+    } else {
+        xscale = 1.f;
+        yscale = (float)winh/(float)winw;
+    }
+    glUniform2f(scale_id, xscale, yscale);
     doPerspective();
 }
+static SDL_HitTestResult SDLCALL hitTest(SDL_Window *window, const SDL_Point *pt, void *data)
+{
+    if( SDL_PointInRect(pt, &(SDL_Rect){40, 0, winw2-85, 22}) == SDL_TRUE ||
+        SDL_PointInRect(pt, &(SDL_Rect){winw2+30, 0, winw2-72, 22}) == SDL_TRUE)
+        return SDL_HITTEST_DRAGGABLE;
+    return SDL_HITTEST_NORMAL;
+}
+void drawHud(uint type);
 void main_loop()
 {
     // time delta
@@ -83,7 +100,7 @@ void main_loop()
             winh = h+(my-dsy);
             dsx = mx;
             dsy = my;
-            if(winw > 420 && winh > 380)
+            if(winw > 400 && winh > 380)
             {
                 SDL_SetWindowSize(wnd, winw, winh);
                 winw2 = winw/2;
@@ -93,37 +110,83 @@ void main_loop()
             lt = t+0.03f;
         }
     }
-    
+
+    static uint last_focus_mouse = 0;
     SDL_Event event;
     while(SDL_PollEvent(&event))
     {
         switch(event.type)
         {
+            case SDL_WINDOWEVENT:
+            {
+                switch(event.window.event)
+                {
+                    case SDL_WINDOWEVENT_FOCUS_GAINED:
+                    {
+                        focus_mouse = last_focus_mouse;
+                        //if(focus_mouse == 1){drawHud(1);}else{drawHud(0);}
+                        SDL_ShowCursor(focus_mouse ? SDL_DISABLE : SDL_ENABLE);
+                        if(wayland == 1 && focus_mouse == 1)
+                        {
+                            SDL_GetRelativeMouseState(&xd, &yd);
+                            SDL_SetRelativeMouseMode(SDL_TRUE);
+                        }
+                    }
+                    break;
+
+                    case SDL_WINDOWEVENT_FOCUS_LOST:
+                    {
+                        last_focus_mouse = focus_mouse;
+                        focus_mouse = 0;
+                        //drawHud(0);
+                        SDL_ShowCursor(SDL_ENABLE);
+                        if(wayland == 1)
+                        {
+                            SDL_GetRelativeMouseState(&xd, &yd);
+                            SDL_SetRelativeMouseMode(SDL_FALSE);
+                        }
+                    }
+                    break;
+
+                    case SDL_WINDOWEVENT_RESIZED:
+                    {
+                        WOX_POP(event.window.data1, event.window.data2);
+                    }
+                    break;
+                }
+            }
+            break;
+
             case SDL_KEYDOWN:
             {
                 if(event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_TAB)
                 {
                     focus_mouse = 1 - focus_mouse;
+                    //if(focus_mouse == 1){drawHud(1);}else{drawHud(0);}
                     SDL_ShowCursor(1 - focus_mouse);
-                    if(focus_mouse == 1)
+                    if(wayland == 1)
                     {
-                        SDL_GetRelativeMouseState(&xd, &yd);
-                        SDL_SetRelativeMouseMode(SDL_TRUE);
+                        if(focus_mouse == 1)
+                        {
+                            SDL_GetRelativeMouseState(&xd, &yd);
+                            SDL_SetRelativeMouseMode(SDL_TRUE);
+                        }
+                        else
+                        {
+                            SDL_GetRelativeMouseState(&xd, &yd);
+                            SDL_SetRelativeMouseMode(SDL_FALSE);
+                        }
                     }
                     else
                     {
-                        SDL_GetRelativeMouseState(&xd, &yd);
-                        SDL_SetRelativeMouseMode(SDL_FALSE);
+                        mx = winw2, my = winh2;
+                        lx = winw2, ly = winh2;
+                        SDL_WarpMouseInWindow(wnd, winw2, winh2);
                     }
                 }
                 else if(event.key.keysym.sym == SDLK_F2)
                 {
                     showhud = 1 - showhud;
-                    if(showhud == 0)
-                    {
-                        shadeVoxel(&projection_id, &view_id, &position_id, &voxel_id);
-                        glUniformMatrix4fv(projection_id, 1, GL_FALSE, (float*)&projection.m[0][0]);
-                    }
                 }
                 if(focus_mouse == 0){break;}
                 if(event.key.keysym.sym == SDLK_w){ks[0] = 1;}
@@ -151,6 +214,7 @@ void main_loop()
                                 for(NULL; i < 40 && g.colors[i] != 0; i++){}
                                 g.st = (float)(i-1);
                                 g.voxels[lray] = i-1;
+                                has_changed = 1;
                             }
                         }
                         updateSelectColor();
@@ -165,6 +229,7 @@ void main_loop()
                                 uint i = 7;
                                 for(NULL; i < 40 && g.colors[i] != 0; i++){}
                                 g.st = (float)(i-1);
+                                has_changed = 1;
                             }
                         }
                         updateSelectColor();
@@ -181,6 +246,7 @@ void main_loop()
                         {
                             g.st = 8.f;
                             g.voxels[lray] = g.st;
+                            has_changed = 1;
                         }
                         updateSelectColor();
                     }
@@ -205,6 +271,7 @@ void main_loop()
                                 const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
                                 g.voxels[PTI(x, g.pb.y, g.pb.z)] = g.st;
                             }
+                            has_changed = 1;
                         }
                     }
                 }
@@ -220,16 +287,20 @@ void main_loop()
                             const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
                             g.voxels[PTI(x, ghp.y, ghp.z)] = 0;
                         }
+                        has_changed = 1;
                     }
                 }
                 else if(event.key.keysym.sym == SDLK_q || event.key.keysym.sym == SDLK_z) // clone pointed voxel color
                 {
                     traceViewPath(0);
-                    //printf("%u\n", lray);
-                    if(lray > -1 && g.voxels[lray] > 7)
+                    if(lray > -1)
                     {
-                        g.st = g.voxels[lray];
-                        updateSelectColor();
+                        if(g.voxels[lray] > 7)
+                        {
+                            g.st = g.voxels[lray];
+                            updateSelectColor();
+                        }
+                        else{sprintf(warnm, "This is a system color you cannot clone this."); wti = t+1.f;}
                     }
                 }
                 else if(event.key.keysym.sym == SDLK_e) // replace pointed voxel
@@ -244,6 +315,7 @@ void main_loop()
                             const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
                             g.voxels[PTI(x, ghp.y, ghp.z)] = g.st;
                         }
+                        has_changed = 1;
                     }
                 }
                 else if(event.key.keysym.sym == SDLK_r) // toggle mirror brush
@@ -258,7 +330,11 @@ void main_loop()
                     vMulS(&pi, pi, 6.f);
                     vAdd(&p, p, pi);
                     const vec rp = (vec){roundf(p.x), roundf(p.y), roundf(p.z)};
-                    if(isInBounds(rp) == 1){g.voxels[PTI(rp.x, rp.y, rp.z)] = 8;}
+                    if(isInBounds(rp) == 1)
+                    {
+                        g.voxels[PTI(rp.x, rp.y, rp.z)] = 8;
+                        has_changed = 1;
+                    }
                 }
                 else if(event.key.keysym.sym == SDLK_f) // toggle movement speeds
                 {
@@ -370,7 +446,6 @@ void main_loop()
                     }
                     updateSelectColor();
                 }
-                //printf("%.2f %u\n", g.st, g.colors[(uint)g.st]);
             }
             break;
 
@@ -405,6 +480,11 @@ void main_loop()
 
             case SDL_MOUSEBUTTONDOWN:
             {
+                if(wayland == 0)
+                {
+                    lx = event.button.x;
+                    ly = event.button.y;
+                }
                 mx = event.button.x;
                 my = event.button.y;
 
@@ -413,7 +493,7 @@ void main_loop()
 
                 if(event.button.button == SDL_BUTTON_LEFT) // check window decor stuff
                 {
-                    if(focus_mouse == 0)
+                    if(wayland == 1 && focus_mouse == 0)
                     {
                         if(llct != 0.f && t-llct < 0.3f)
                         {
@@ -484,13 +564,16 @@ void main_loop()
                         }
                     }
                 }
-                
+
                 if(focus_mouse == 0) // lock mouse focus on every mouse input to the window
                 {
                     SDL_ShowCursor(0);
                     focus_mouse = 1;
-                    SDL_GetRelativeMouseState(&xd, &yd);
-                    SDL_SetRelativeMouseMode(SDL_TRUE);
+                    if(wayland == 1)
+                    {
+                        SDL_GetRelativeMouseState(&xd, &yd);
+                        SDL_SetRelativeMouseMode(SDL_TRUE);
+                    }
                     break;
                 }
 
@@ -498,7 +581,6 @@ void main_loop()
                 {
                     ptt = t+rrsp;
                     traceViewPath(1);
-                    //printf("L: %u %f %u\n", lray, g.pb.w, g.voxels[lray]);
                     if(lray > -1)
                     {
                         if(g.pb.w == 1 && isInBounds(g.pb) && g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] == 0)
@@ -508,8 +590,8 @@ void main_loop()
                             {
                                 const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
                                 g.voxels[PTI(x, g.pb.y, g.pb.z)] = g.st;
-                                //printf("%f %f %f\n", x, g.pb.y, g.pb.z);
                             }
+                            has_changed = 1;
                         }
                     }
                 }
@@ -517,7 +599,6 @@ void main_loop()
                 {
                     dtt = t+rrsp;
                     traceViewPath(0);
-                    //printf("R: %u %f %u\n", lray, g.pb.w, g.voxels[lray]);
                     if(lray > -1)
                     {
                         g.voxels[lray] = 0;
@@ -525,17 +606,21 @@ void main_loop()
                         {
                             const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
                             g.voxels[PTI(x, ghp.y, ghp.z)] = 0;
-                            //printf("%f %f %f\n", x, g.pb.y, g.pb.z);
                         }
+                        has_changed = 1;
                     }
                 }
                 else if(event.button.button == SDL_BUTTON_MIDDLE || event.button.button == SDL_BUTTON_X1) // clone pointed voxel
                 {
                     traceViewPath(0);
-                    if(lray > -1 && g.voxels[lray] > 7)
+                    if(lray > -1)
                     {
-                        g.st = g.voxels[lray];
-                        updateSelectColor();
+                        if(g.voxels[lray] > 7)
+                        {
+                            g.st = g.voxels[lray];
+                            updateSelectColor();
+                        }
+                        else{sprintf(warnm, "This is a system color you cannot clone this."); wti = t+1.f;}
                     }
                 }
                 else if(event.button.button == SDL_BUTTON_X2) // replace pointed node
@@ -550,16 +635,10 @@ void main_loop()
                             const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
                             g.voxels[PTI(x, ghp.y, ghp.z)] = g.st;
                         }
+                        has_changed = 1;
                     }
                 }
                 idle = t;
-            }
-            break;
-
-            case SDL_WINDOWEVENT:
-            {
-                if(event.window.event == SDL_WINDOWEVENT_RESIZED)
-                    WOX_POP(event.window.data1, event.window.data2);
             }
             break;
 
@@ -595,11 +674,12 @@ void main_loop()
                         const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
                         g.voxels[PTI(x, g.pb.y, g.pb.z)] = g.st;
                     }
+                    has_changed = 1;
                 }
             }
             ptt = t+0.1;
         }
-        
+
         if(dtt != 0.f && t > dtt) // delete trigger
         {
             traceViewPath(0);
@@ -611,11 +691,12 @@ void main_loop()
                     const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
                     g.voxels[PTI(x, ghp.y, ghp.z)] = 0;
                 }
+                has_changed = 1;
             }
             dtt = t+0.1f;
         }
 
-        if(rtt != 0.f && t > rtt) // replace trigger
+        if(rtt != 0.f) // replace trigger
         {
             traceViewPath(0);
             if(lray > -1)
@@ -626,8 +707,8 @@ void main_loop()
                     const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
                     g.voxels[PTI(x, ghp.y, ghp.z)] = g.st;
                 }
+                has_changed = 1;
             }
-            rtt = t+0.1f;
         }
 
         if(ks[0] == 1) // W
@@ -693,26 +774,58 @@ void main_loop()
         else if(ks[8] == 1) // DOWN
             g.yrot -= 0.7f*dt;
 
-        // camera/mouse control
-        SDL_GetRelativeMouseState(&xd, &yd);
-        if(xd != 0 || yd != 0)
+        if(wayland == 1)
         {
-            g.xrot -= xd*g.sens;
-            g.yrot -= yd*g.sens;
+            // camera/mouse control
+            SDL_GetRelativeMouseState(&xd, &yd);
+            if(xd != 0 || yd != 0)
+            {
+                g.xrot -= xd*g.sens;
+                g.yrot -= yd*g.sens;
 
-            if(g.plock == 1)
-            {
-                if(g.yrot > 3.11f)
-                    g.yrot = 3.11f;
-                if(g.yrot < 0.03f)
-                    g.yrot = 0.03f;
+                if(g.plock == 1)
+                {
+                    if(g.yrot > 3.11f)
+                        g.yrot = 3.11f;
+                    if(g.yrot < 0.03f)
+                        g.yrot = 0.03f;
+                }
+                else
+                {
+                    if(g.yrot > 3.14f)
+                        g.yrot = 3.14f;
+                    if(g.yrot < 0.1f)
+                        g.yrot = 0.1f;
+                }
             }
-            else
+        }
+        else
+        {
+            // camera/mouse control
+            const float xd = lx-mx;
+            const float yd = ly-my;
+            if(xd != 0 || yd != 0)
             {
-                if(g.yrot > 3.14f)
-                    g.yrot = 3.14f;
-                if(g.yrot < 0.1f)
-                    g.yrot = 0.1f;
+                g.xrot += xd*g.sens;
+                g.yrot += yd*g.sens;
+
+                if(g.plock == 1)
+                {
+                    if(g.yrot > 3.11f)
+                        g.yrot = 3.11f;
+                    if(g.yrot < 0.03f)
+                        g.yrot = 0.03f;
+                }
+                else
+                {
+                    if(g.yrot > 3.14f)
+                        g.yrot = 3.14f;
+                    if(g.yrot < 0.1f)
+                        g.yrot = 0.1f;
+                }
+                
+                lx = winw2, ly = winh2;
+                SDL_WarpMouseInWindow(wnd, lx, ly);
             }
         }
     }
@@ -733,101 +846,63 @@ void main_loop()
 // main render
 //*************************************
 
-    // voxels
-    if(showhud == 1)
-    {
-        shadeVoxel(&projection_id, &view_id, &position_id, &voxel_id);
-        glUniformMatrix4fv(projection_id, 1, GL_FALSE, (float*)&projection.m[0][0]);
-    }
-    glBindBuffer(GL_ARRAY_BUFFER, mdlVoxel.vid);
-    glVertexAttribPointer(position_id, 3, GL_FLOAT, GL_FALSE, 0, 0);
-    glEnableVertexAttribArray(position_id);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mdlVoxel.iid);
-
-    // render voxels
     ipp = g.pp; // inverse player position (setting global 'ipp' here is perfect)
     vInv(&ipp); // <--
-    glUniformMatrix4fv(view_id, 1, GL_FALSE, (float*)&view.m[0][0]);
 
-    // for(uint i = 0; i < max_voxels; i++)
-    // {
-    //     if(g.voxels[i] == 0){continue;}
-    //     if(g.colors[g.voxels[i]-1] != 0)
-    //     {
-    //         const float fi = (float)i;
-    //         glUniform2f(voxel_id, fi, g.colors[g.voxels[i]-1]);
-    //         glDrawElements(GL_TRIANGLES, voxel_numind, GL_UNSIGNED_BYTE, 0);
-    //     }
-    // }
+    // hud
+    drawHud(focus_mouse);
+    flipHud();
 
-    for(uchar z = 0; z < 128; z++)
+    // has changed?
+    if(has_changed == 1)
     {
-        for(uchar y = 0; y < 128; y++)
-        {
-            for(uchar x = 0; x < 128; x++)
-            {
-                if(insideFrustum(x,y,z) == 0){continue;}
-                if( x <=   0 || y <=   0 || z <=   0 ||
-                    x >= 127 || y >= 127 || z >= 127 ||
-                    g.voxels[PTIB(x-1, y, z)] == 0 || // check if generally occluded (not by lookdir)
-                    g.voxels[PTIB(x+1, y, z)] == 0 ||
-                    g.voxels[PTIB(x, y-1, z)] == 0 ||
-                    g.voxels[PTIB(x, y+1, z)] == 0 ||
-                    g.voxels[PTIB(x, y, z-1)] == 0 ||
-                    g.voxels[PTIB(x, y, z+1)] == 0 )
-                {
-                    const uint i = PTI(x,y,z);
-                    if(g.voxels[i] == 0){continue;}
-                    uint rc = g.colors[g.voxels[i]-1];
-                    if(rc == 0){rc=16745211;}
-                    const float fi = (float)i;
-                    glUniform2f(voxel_id, fi, rc);
-                    glDrawElements(GL_TRIANGLES, voxel_numind, GL_UNSIGNED_BYTE, 0);
-                }
+        // update voxels
+        for (int x = 0; x < 1024; x++)
+        for (int y = 0; y < 2048; y++) {
+            int index = (x * 2048) + y;
+            if (g.voxels[index] < 1) {
+            setpixel(sVoxel, x, y, 0x00000000);
+            } else {
+                uint32_t color = g.colors[g.voxels[index]-1];
+                color = (color >> 16) | (((color >> 8) & 0xFF) << 8) | ((color & 0xFF) << 16) | (0xFF << 24);
+                setpixel(sVoxel, x, y, color);
             }
         }
-    }
+        voxelmap = esReLoadTextureA(1024, 2048, sVoxel->pixels, 0);
 
-    // canvas frame
-    if(showhud == 1)
-    {
-        glUniform2f(voxel_id, 0.f, 65535.f);
-        esRebind(GL_ARRAY_BUFFER, &mdlVoxel.vid, &(GLfloat[]){
-                                                                127.5f, 127.5f, 127.5f,
-                                                                -0.5f, 127.5f, 127.5f,
-                                                                -0.5f, 127.5f, -0.5f,
-                                                                127.5f, 127.5f, -0.5f,
-                                                                127.5f, -0.5f, 127.5f, //
-                                                                -0.5f, -0.5f, 127.5f,
-                                                                -0.5f, -0.5f, -0.5f,
-                                                                127.5f, -0.5f, -0.5f,
-                                                            }
-                                                            , 8 * 3 * sizeof(float), GL_STATIC_DRAW);
-        esRebind(GL_ELEMENT_ARRAY_BUFFER, &mdlVoxel.iid, &(GLbyte[]){0,1,2,3,0,4,5,6,7,4,5,1,2,6,7,3}, 16, GL_STATIC_DRAW);
-        glDrawElements(GL_LINE_STRIP, 16, GL_UNSIGNED_BYTE, 0);
-        esRebind(GL_ARRAY_BUFFER,         &mdlVoxel.vid, voxel_vertices, sizeof(voxel_vertices), GL_STATIC_DRAW);
-        esRebind(GL_ELEMENT_ARRAY_BUFFER, &mdlVoxel.iid, voxel_indices,  sizeof(voxel_indices),  GL_STATIC_DRAW);
-
-        // hud
-        drawHud(focus_mouse);
-        shadeHud(&position_id, &texcoord_id, &sampler_id);
-        glUniformMatrix4fv(projection_id, 1, GL_FALSE, (float*)&projection.m[0][0]);
+        // bind the new texture
         glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, voxelmap);
+        glUniform1i(voxel_id, 0);
+
+        // bind the hudmap
+        glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, hudmap);
-        glUniform1i(sampler_id, 0);
-        glBindBuffer(GL_ARRAY_BUFFER, mdlPlane.vid);
-        glVertexAttribPointer(position_id, 3, GL_FLOAT, GL_FALSE, 0, 0);
-        glEnableVertexAttribArray(position_id);
-        glBindBuffer(GL_ARRAY_BUFFER, mdlPlane.tid);
-        glVertexAttribPointer(texcoord_id, 2, GL_FLOAT, GL_FALSE, 0, 0);
-        glEnableVertexAttribArray(texcoord_id);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mdlPlane.iid);
-        glDisable(GL_DEPTH_TEST);
-        glEnable(GL_BLEND);
-            glDrawElements(GL_TRIANGLES, hud_numind, GL_UNSIGNED_BYTE, 0);
-        glDisable(GL_BLEND);
-        glEnable(GL_DEPTH_TEST);
+        glUniform1i(hud_id, 1);
     }
+
+    // pass the current look pos (player position)
+    glUniform3f(look_pos_id, -g.pp.x, -g.pp.y, -g.pp.z);
+
+    // pass the view unit vectors
+    vec v;
+    mGetViewX(&v, view);
+    v.x *= -1.f;
+    v.y *= -1.f;
+    v.z *= -1.f;
+    glUniform3fv(view_id + 0, 1, (GLfloat*)&v);
+    //
+    mGetViewY(&v, view);
+    v.x *= -1.f;
+    v.y *= -1.f;
+    v.z *= -1.f;
+    glUniform3fv(view_id + 1, 1, (GLfloat*)&v);
+    //
+    mGetViewZ(&v, view);
+    glUniform3fv(view_id + 2, 1, (GLfloat*)&v);
+
+    // ok let's draw
+    glDrawElements(GL_TRIANGLES, hud_numind, GL_UNSIGNED_BYTE, 0);
 
 //*************************************
 // swap buffers / display render
@@ -835,64 +910,76 @@ void main_loop()
     SDL_GL_SwapWindow(wnd);
 }
 void drawHud(const uint type)
-{
+{    
     // clear cpu hud before rendering to it
     SDL_FillRect(sHud, &sHud->clip_rect, 0x00000000);
     if(type == 0)
     {
-        // updated maxed state >:( wayland
-        const uint flags = SDL_GetWindowFlags(wnd);
-        if(flags & SDL_WINDOW_MAXIMIZED){maxed = 1;}else{maxed = 0;}
-
-        // window title
-        SDL_FillRect(sHud, &(SDL_Rect){0, 0, winw, 19}, 0xDDFFFF00);
-        SDL_FillRect(sHud, &(SDL_Rect){1, 1, winw-2, 17}, 0xBB777700);
-        const uint len = lenText("Woxel");
-        drawText(sHud, "Woxel", winw2-24, 3, 3);
-        drawText(sHud, "Woxel", winw2-26, 3, 3);
-        drawText(sHud, "Woxel", winw2-25, 5, 3);
-        drawText(sHud, "Woxel", winw2-25, 4, 0);
-        drawText(sHud, "X -", 5, 4, 3);
-        drawText(sHud, "X -", 4, 5, 0);
-        if(maxed == 0)
+        if(wayland == 1)
         {
-            SDL_FillRect(sHud, &(SDL_Rect){25, 3, 11, 11}, 0xFF00BFFF);
-            SDL_FillRect(sHud, &(SDL_Rect){24, 4, 11, 11}, 0xFF000000);
-            SDL_FillRect(sHud, &(SDL_Rect){25, 5, 9, 9}, 0xBB777700);
+            // updated maxed state >:( wayland
+            const uint flags = SDL_GetWindowFlags(wnd);
+            if(flags & SDL_WINDOW_MAXIMIZED){maxed = 1;}else{maxed = 0;}
+
+            // window title
+            SDL_FillRect(sHud, &(SDL_Rect){0, 0, winw, 19}, 0xDDFFFF00);
+            SDL_FillRect(sHud, &(SDL_Rect){1, 1, winw-2, 17}, 0xBB777700);
+            const uint len = lenText("Woxel");
+            drawText(sHud, "Woxel", winw2-24, 3, 3);
+            drawText(sHud, "Woxel", winw2-26, 3, 3);
+            drawText(sHud, "Woxel", winw2-25, 5, 3);
+            drawText(sHud, "Woxel", winw2-25, 4, 0);
+            drawText(sHud, "X -", 5, 4, 3);
+            drawText(sHud, "X -", 4, 5, 0);
+            if(maxed == 0)
+            {
+                SDL_FillRect(sHud, &(SDL_Rect){25, 3, 11, 11}, 0xFF00BFFF);
+                SDL_FillRect(sHud, &(SDL_Rect){24, 4, 11, 11}, 0xFF000000);
+                SDL_FillRect(sHud, &(SDL_Rect){25, 5, 9, 9}, 0xBB777700);
+            }
+            else
+            {
+                SDL_FillRect(sHud, &(SDL_Rect){24, 4, 11, 11}, 0xFF00BFFF);
+                SDL_FillRect(sHud, &(SDL_Rect){23, 3, 11, 11}, 0xFF000000);
+                SDL_FillRect(sHud, &(SDL_Rect){24, 4, 9, 9}, 0xBB777700);
+            }
+            drawText(sHud, "- X", winw-23, 4, 3);
+            drawText(sHud, "- X", winw-22, 5, 0);
+            if(maxed == 0)
+            {
+                SDL_FillRect(sHud, &(SDL_Rect){winw-38, 3, 11, 11}, 0xFF00BFFF);
+                SDL_FillRect(sHud, &(SDL_Rect){winw-37, 4, 11, 11}, 0xFF000000);
+                SDL_FillRect(sHud, &(SDL_Rect){winw-36, 5, 9, 9}, 0xBB777700);
+            }
+            else
+            {
+                SDL_FillRect(sHud, &(SDL_Rect){winw-37, 4, 11, 11}, 0xFF00BFFF);
+                SDL_FillRect(sHud, &(SDL_Rect){winw-36, 3, 11, 11}, 0xFF000000);
+                SDL_FillRect(sHud, &(SDL_Rect){winw-35, 4, 9, 9}, 0xBB777700);
+            }
+            SDL_FillRect(sHud, &(SDL_Rect){winw-15, winh-15, 15, 15}, 0xDDFFFF00);
+            SDL_FillRect(sHud, &(SDL_Rect){winw-14, winh-14, 13, 13}, 0xBB777700);
+            drawText(sHud, "r", winw-9, winh-13, 3);
+            drawText(sHud, "r", winw-10, winh-14, 0);
+
+            SDL_FillRect(sHud, &(SDL_Rect){40, 3, winw2-85, 13}, 0xDDa0b010);
+            SDL_FillRect(sHud, &(SDL_Rect){winw2+30, 3, winw2-72, 13}, 0xDDa0b010);
+
+            // fps
+            char tmp[16];
+            sprintf(tmp, "%u", g_fps);
+            SDL_FillRect(sHud, &(SDL_Rect){0, 19, lenText(tmp)+8, 19}, 0xCC000000);
+            drawText(sHud, tmp, 4, 23, 2);
         }
         else
         {
-            SDL_FillRect(sHud, &(SDL_Rect){24, 4, 11, 11}, 0xFF00BFFF);
-            SDL_FillRect(sHud, &(SDL_Rect){23, 3, 11, 11}, 0xFF000000);
-            SDL_FillRect(sHud, &(SDL_Rect){24, 4, 9, 9}, 0xBB777700);
+            // fps
+            char tmp[16];
+            sprintf(tmp, "%u", g_fps);
+            SDL_FillRect(sHud, &(SDL_Rect){0, 0, lenText(tmp)+8, 19}, 0xCC000000);
+            drawText(sHud, tmp, 4, 4, 2);
         }
-        drawText(sHud, "- X", winw-23, 4, 3);
-        drawText(sHud, "- X", winw-22, 5, 0);
-        if(maxed == 0)
-        {
-            SDL_FillRect(sHud, &(SDL_Rect){winw-38, 3, 11, 11}, 0xFF00BFFF);
-            SDL_FillRect(sHud, &(SDL_Rect){winw-37, 4, 11, 11}, 0xFF000000);
-            SDL_FillRect(sHud, &(SDL_Rect){winw-36, 5, 9, 9}, 0xBB777700);
-        }
-        else
-        {
-            SDL_FillRect(sHud, &(SDL_Rect){winw-37, 4, 11, 11}, 0xFF00BFFF);
-            SDL_FillRect(sHud, &(SDL_Rect){winw-36, 3, 11, 11}, 0xFF000000);
-            SDL_FillRect(sHud, &(SDL_Rect){winw-35, 4, 9, 9}, 0xBB777700);
-        }
-        SDL_FillRect(sHud, &(SDL_Rect){winw-15, winh-15, 15, 15}, 0xDDFFFF00);
-        SDL_FillRect(sHud, &(SDL_Rect){winw-14, winh-14, 13, 13}, 0xBB777700);
-        drawText(sHud, "r", winw-9, winh-13, 3);
-        drawText(sHud, "r", winw-10, winh-14, 0);
 
-        SDL_FillRect(sHud, &(SDL_Rect){40, 3, winw2-85, 13}, 0xDDa0b010);
-        SDL_FillRect(sHud, &(SDL_Rect){winw2+30, 3, winw2-72, 13}, 0xDDa0b010);
-
-        // fps
-        char tmp[16];
-        sprintf(tmp, "%u", g_fps);
-        SDL_FillRect(sHud, &(SDL_Rect){0, 19, lenText(tmp)+8, 19}, 0xCC000000);
-        drawText(sHud, tmp, 4, 23, 2);
         // center hud
         const int left = winw2-177;
         int top = winh2-152;
@@ -905,7 +992,7 @@ void drawHud(const uint type)
         top += 33;
         a = drawText(sHud, "WASD ", left, top, 2);
         drawText(sHud, "Move around based on relative orientation to X and Y.", a, top, 1);
-        
+
         top += 11;
         a = drawText(sHud, "SPACE", left, top, 2);
         a = drawText(sHud, " + ", a, top, 4);
@@ -915,7 +1002,7 @@ void drawHud(const uint type)
         top += 11;
         a = drawText(sHud, "F ", left, top, 2);
         drawText(sHud, "Toggle player fast speed on and off.", a, top, 1);
-        
+
         top += 11;
         a = drawText(sHud, "1", left, top, 2);
         a = drawText(sHud, "-", a, top, 4);
@@ -972,7 +1059,7 @@ void drawHud(const uint type)
 
         top += 22;
         drawText(sHud, "Check the console output for more information.", left, top, 3);
-    
+
         for(uint i = 0; i < 16; i++)
         {
             const uint left2 = left+(i*22);
@@ -1140,6 +1227,13 @@ void drawHud(const uint type)
         }
     }
 
+    // tooltips
+    if(wti > t)
+    {
+        const int hlen = lenText(warnm)/2;
+        drawText(sHud, warnm, winw2-hlen, winh2-22, 3);
+    }
+
     // flip the new hud to gpu
     flipHud();
 }
@@ -1218,11 +1312,9 @@ int main(int argc, char** argv)
     if(argc >= 5 && strcmp(argv[1], "export") == 0 && strlen(argv[2]) < 256 && strlen(argv[4]) < 1024)
     {
         sprintf(openTitle, "%s", argv[2]);
-
         if     (strcmp(argv[3], "txt") == 0){export_type=1;}
         else if(strcmp(argv[3], "vv") == 0){export_type=2;}
         else if(strcmp(argv[3], "ply") == 0){export_type=3;}
-
         sprintf(export_path, "%s", argv[4]);
     }
 
@@ -1233,30 +1325,30 @@ int main(int argc, char** argv)
         memset(&g.voxels, 0, max_voxels);
         //
         g.voxels[PTI(64,64,64)] = 1; // center
-        g.voxels[PTI(64,64,0)] = 7;
-        g.voxels[PTI(0,64,64)] = 3;
-        g.voxels[PTI(64,0,64)] = 5;
-        g.voxels[PTI(64,64,127)] = 6;
-        g.voxels[PTI(127,64,64)] = 2;
-        g.voxels[PTI(64,127,64)] = 4;
+        g.voxels[PTI(64,64,1)] = 7;
+        g.voxels[PTI(1,64,64)] = 3;
+        g.voxels[PTI(64,1,64)] = 5;
+        g.voxels[PTI(64,64,126)] = 6;
+        g.voxels[PTI(126,64,64)] = 2;
+        g.voxels[PTI(64,126,64)] = 4;
         //
-        g.voxels[PTI(0,0,0)] = 1;
-        g.voxels[PTI(127,127,127)] = 1;
-        g.voxels[PTI(0,127,127)] = 1;
-        g.voxels[PTI(127,127,0)] = 1;
-        g.voxels[PTI(127,0,0)] = 1;
-        g.voxels[PTI(0,0,127)] = 1;
-        g.voxels[PTI(127,0,127)] = 1;
-        g.voxels[PTI(0,127,0)] = 1;
+        g.voxels[PTI(1,1,1)] = 1;
+        g.voxels[PTI(126,126,126)] = 1;
+        g.voxels[PTI(1,126,126)] = 1;
+        g.voxels[PTI(126,126,1)] = 1;
+        g.voxels[PTI(126,1,1)] = 1;
+        g.voxels[PTI(1,1,126)] = 1;
+        g.voxels[PTI(126,1,126)] = 1;
+        g.voxels[PTI(1,126,1)] = 1;
         //
         // system palette
-        g.colors[0] = 16448250;
+        g.colors[0] = 16777215;
         g.colors[1] = 16711680;
-        g.colors[2] = 4194304;
+        g.colors[2] = 8388608;
         g.colors[3] = 65280;
-        g.colors[4] = 16384;
+        g.colors[4] = 32768;
         g.colors[5] = 255;
-        g.colors[6] = 64;
+        g.colors[6] = 128;
         // user palette
         g.colors[7] = 16777215;
         g.colors[8] = 16476957;
@@ -1308,7 +1400,7 @@ int main(int argc, char** argv)
         else
             printf("[%s] Opened: %s\n", tmp, openTitle);
     }
-    
+
     //memset(&g.voxels, 8, max_voxels);
 
     // if this is just an export job then export and quit.
@@ -1505,7 +1597,7 @@ int main(int argc, char** argv)
         printf("ERROR: SDL_Init(): %s\n", SDL_GetError());
         return 1;
     }
-    int msaa = 16;
+    int msaa = 0;
     if(msaa > 0)
     {
         SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
@@ -1514,17 +1606,37 @@ int main(int argc, char** argv)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-    wnd = SDL_CreateWindow(appTitle, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winw, winh, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_BORDERLESS);
-    while(wnd == NULL)
+    if(isWayland() == 1)
     {
-        msaa--;
-        if(msaa == 0)
-        {
-            printf("ERROR: SDL_CreateWindow(): %s\n", SDL_GetError());
-            return 1;
-        }
-        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, msaa);
+        wayland = 1;
         wnd = SDL_CreateWindow(appTitle, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winw, winh, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_BORDERLESS);
+        while(wnd == NULL)
+        {
+            msaa--;
+            if(msaa == 0)
+            {
+                printf("ERROR: SDL_CreateWindow(): %s\n", SDL_GetError());
+                return 1;
+            }
+            SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, msaa);
+            wnd = SDL_CreateWindow(appTitle, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winw, winh, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_BORDERLESS);
+        }
+    }
+    else
+    {
+        wayland = 0;
+        wnd = SDL_CreateWindow(appTitle, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winw, winh, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
+        while(wnd == NULL)
+        {
+            msaa--;
+            if(msaa == 0)
+            {
+                printf("ERROR: SDL_CreateWindow(): %s\n", SDL_GetError());
+                return 1;
+            }
+            SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, msaa);
+            wnd = SDL_CreateWindow(appTitle, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winw, winh, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
+        }
     }
     SDL_GL_SetSwapInterval(1);
     glc = SDL_GL_CreateContext(wnd);
@@ -1535,7 +1647,7 @@ int main(int argc, char** argv)
     }
 
     // callback for custom decor
-    SDL_SetWindowHitTest(wnd, hitTest, NULL);
+    if(wayland == 1){SDL_SetWindowHitTest(wnd, hitTest, NULL);}
 
     // set icon
     s_icon = surfaceFromData((Uint32*)&icon, 16, 16);
@@ -1575,9 +1687,10 @@ int main(int argc, char** argv)
         printAttrib(SDL_GL_CONTEXT_RELEASE_BEHAVIOR, "GL_CONTEXT_RELEASE_BEHAVIOR");
         printAttrib(SDL_GL_CONTEXT_EGL, "GL_CONTEXT_EGL");
         printf("----\n");
+        printf("tseT_resU aka (xaH)\n");
+        printf("gubaton.gro\\resu_tset\n");
         printf("semaJmailliWrehctelF\n");
         printf("buhtig.moc\\dibrm\n");
-        //printf("James William Fletcher (github.com/mrbid)\n");
         printf("----\n");
         SDL_version compiled;
         SDL_version linked;
@@ -1591,30 +1704,46 @@ int main(int argc, char** argv)
         printf("----\n");
     }
 
+    // is this an rtx card? (lol don't need this anymore, but an amusing relic non-the-less)
+    // if(strstr(glGetString(GL_RENDERER), "RTX") != NULL)
+    //     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "Uh-oh! RTX DETECTED!", "We see that you are using an RTX graphics card.\n\nWe won't stop you using this software but please be aware this program has\nvery poor to basically an unusable experience on RTX graphics cards.\n\n ... ironically.\n\nConsider using Woxel.xyz the Web version or version 1.3 at github.com/woxels/Woxel", wnd);
+
 //*************************************
 // projection & compile & link shader program
 //*************************************
-    doPerspective();
-    makeVoxel();
+    WOX_POP(winw, winh);
     makeHud();
+    shadeHud(&position_id, &hud_id, &look_pos_id, &scale_id, &view_id, &voxel_id);
+    glUniform2f(scale_id, xscale, yscale);
+    glBindBuffer(GL_ARRAY_BUFFER, mdlPlane.vid);
+    glVertexAttribPointer(position_id, 2, GL_FLOAT, GL_FALSE, 0, 0);
+    glEnableVertexAttribArray(position_id);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mdlPlane.iid);
 
 //*************************************
 // configure render options
 //*************************************
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_CULL_FACE);
-    glEnable(GL_DEPTH_TEST);
+    glDisable(GL_DEPTH_TEST);
     glLineWidth(0.f);
     glClearColor(0.f, 0.f, 0.f, 0.f);
-    shadeVoxel(&projection_id, &view_id, &position_id, &voxel_id);
-    glUniformMatrix4fv(projection_id, 1, GL_FALSE, (float*)&projection.m[0][0]);
 
 //*************************************
 // final init stuff
 //*************************************
-    sHud = SDL_RGBA32Surface(winw, winh);
-    drawHud(0);
-    hudmap = esLoadTextureA(winw, winh, sHud->pixels, 0);
+    sVoxel = SDL_RGBA32Surface(1024, 2048);
+    for (int x = 0; x < 1024; x++)
+    for (int y = 0; y < 2048; y++) {
+        int index = (x * 2048) + y;
+        if (g.voxels[index] < 1) {
+	    setpixel(sVoxel, x, y, 0x00000000);
+        } else {
+            uint32_t color = g.colors[g.voxels[index]-1];
+            color = (color >> 16) | (((color >> 8) & 0xFF) << 8) | ((color & 0xFF) << 16) | (0xFF << 24);
+            setpixel(sVoxel, x, y, color);
+        }
+    }
+    voxelmap = esLoadTextureA(1024, 2048, sVoxel->pixels, 0);
+    flipHud();
     updateSelectColor();
 
 //*************************************
