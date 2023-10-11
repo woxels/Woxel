@@ -1111,7 +1111,7 @@ void drawHud(const uint type)
             }
         }
     }
-    else
+    else if(showhud == 1)
     {
         if(t < bigc)
         {
