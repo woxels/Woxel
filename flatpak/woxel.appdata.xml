@@ -4,7 +4,7 @@
 	<metadata_license>CC-BY-4.0</metadata_license>
 	<project_license>GPL-2.0-only</project_license>
 	<name>Woxel</name>
-	<summary>Open Source 3D voxel editor that's better than Goxel ;p</summary>
+	<summary>Open Source 3D voxel editor akin to Minecraft</summary>
 	<description>
 		<p>Woxel uses intuitive controls akin to Minetest and Minecraft, while providing a design experience similar to Goxel and Magicalvoxel.</p>
 		<p>Woxel is a great way to turn Minecraft players into 3D asset creators for games! Try the Web version at woxel.xyz</p>
