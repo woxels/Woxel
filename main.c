@@ -680,7 +680,7 @@ void main_loop()
             ptt = t+0.1;
         }
 
-        if(dtt != 0.f && t > dtt) // delete trigger
+        if(dtt != 0.f && t > dtt) // replace trigger
         {
             traceViewPath(0);
             if(lray > -1)
@@ -833,7 +833,6 @@ void main_loop()
     mIdent(&view);
     mRotate(&view, g.yrot, 1.f, 0.f, 0.f);
     mRotate(&view, g.xrot, 0.f, 0.f, 1.f);
-    mTranslate(&view, g.pp.x, g.pp.y, g.pp.z);
 
     mGetViewZ(&look_dir, view); // refresh
 
@@ -1711,7 +1710,6 @@ int main(int argc, char** argv)
 //*************************************
 // projection & compile & link shader program
 //*************************************
-    WOX_POP(winw, winh);
     makeHud();
     shadeHud(&position_id, &hud_id, &look_pos_id, &scale_id, &view_id, &voxel_id);
     glUniform2f(scale_id, xscale, yscale);
@@ -1719,6 +1717,7 @@ int main(int argc, char** argv)
     glVertexAttribPointer(position_id, 2, GL_FLOAT, GL_FALSE, 0, 0);
     glEnableVertexAttribArray(position_id);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mdlPlane.iid);
+    WOX_POP(winw, winh);
 
 //*************************************
 // configure render options
