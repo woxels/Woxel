@@ -680,7 +680,7 @@ void main_loop()
             ptt = t+0.1;
         }
 
-        if(dtt != 0.f && t > dtt) // replace trigger
+        if(dtt != 0.f && t > dtt) // delete trigger
         {
             traceViewPath(0);
             if(lray > -1)
