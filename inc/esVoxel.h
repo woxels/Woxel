@@ -9,20 +9,7 @@
 
     A pretty good color converter: https://www.easyrgb.com/en/convert.php
 
-    I was going to supply position and color on two Uniform1f's calls and
-    execute the color Uniform1f using the painters algorithm on the limited
-    32 color palette. This way less bandwidth would be used in the heavy
-    per-voxel drawcall loop.
-
-    The problem is this increases code complexity and the project performance
-    gain is probably not worth while. I would need to track each color node
-    placed in it's own array by it's main array index. This would require
-    dynamic array realloc or pre-allocating 128^3 length arrays for each
-    maximum possible 32 colors. That's 268.43 MB.
-
-    I don't think it's in anyones interest for me to go to that extreme,
-    the performance benefit is unlikely to be felt by the user and thus
-    makes the code more complicated without good reason.
+    This version uses ray tracing in an OpenGL 1.0 Shader to render a volume of voxels.
 
     Requires:
         - vec.h: https://gist.github.com/mrbid/77a92019e1ab8b86109bf103166bd04e
