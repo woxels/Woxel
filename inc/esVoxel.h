@@ -9,7 +9,7 @@
 
     A pretty good color converter: https://www.easyrgb.com/en/convert.php
 
-    This version uses ray tracing in an OpenGL 1.0 Shader to render a volume of voxels.
+    This version uses ray tracing in an OpenGL 1.0 shader to render a volume of voxels.
 
     Requires:
         - vec.h: https://gist.github.com/mrbid/77a92019e1ab8b86109bf103166bd04e
