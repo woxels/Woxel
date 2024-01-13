@@ -36,7 +36,6 @@ GLint texcoord_id;
 GLint hud_id;
 GLint look_pos_id;
 GLint scale_id;
-GLint voxels_id;
 
 // render state matrices
 mat projection;
