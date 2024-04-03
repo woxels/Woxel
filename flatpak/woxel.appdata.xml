@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <application>
-	<id type="desktop">woxel.desktop</id>
+	<id>xyz.woxel.Woxel</id>
 	<metadata_license>CC-BY-4.0</metadata_license>
 	<project_license>GPL-2.0-only</project_license>
+	<developer_name>James William Fletcher</developer_name>
+	<launchable type="desktop-id">xyz.woxel.Woxel.desktop</launchable>
 	<name>Woxel</name>
 	<summary>Minecraft Style Voxel Editor</summary>
 	<description>
@@ -30,9 +32,10 @@
 		<p>Your state is automatically saved on exit.</p>
 		<p>Check the console output for more information, arguments can be passed to the program to export your project, create a new project, load a project from file, change mouse sensitivity and apply custom color palettes to projects.</p>
 	</description>
-	<screenshots>
-		<screenshot>https://raw.githubusercontent.com/woxels/woxels.github.io/main/Screenshot_2023-09-02_07-06-18.png</screenshot>
-	</screenshots>
+	<screenshot type="default">
+		<image>https://raw.githubusercontent.com/woxels/woxels.github.io/main/Screenshot_2023-09-02_07-06-18.png</image>
+		<caption>Woxel Screenshot</caption>
+	</screenshot>
 	<url type="homepage">https://woxels.github.io</url>
 	<releases>
 		<release version="1.4" date="2023-10-10" />
