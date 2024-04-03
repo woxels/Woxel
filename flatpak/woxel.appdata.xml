@@ -26,8 +26,8 @@
 			<li>X + C / Slash + Quote = Change texture of pointed node.</li>
 			<li>F1 = Resets environment state back to default.</li>
 			<li>F2 = Toggle HUD visibility.</li>
-			<li>F3 = Save. <i>(auto saves on exit or idle for more than 3 minutes)</i></li>
-			<li>F8 = Load. <i>(will erase what you have done since the last save)</i></li>
+			<li>F3 = Save. (auto saves on exit, backup made if idle for 3 mins)</li>
+			<li>F8 = Load. (will erase what you have done since the last save)</li>
 		</ul>
 		<p>Your state is automatically saved on exit.</p>
 		<p>Check the console output for more information, arguments can be passed to the program to export your project, create a new project, load a project from file, change mouse sensitivity and apply custom color palettes to projects.</p>
