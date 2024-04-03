@@ -1267,7 +1267,7 @@ int main(int argc, char** argv)
     printf("P = Toggle pitch lock.\n");
     printf("F1 = Resets environment state back to default.\n");
     printf("F2 = Toggle HUD visibility.\n");
-    printf("F3 = Save. (auto saves on exit, backup made if idle for 3 mins.)\n");
+    printf("F3 = Save. (auto saves on exit, backup made if idle for 3 mins)\n");
     printf("F8 = Load. (will erase what you have done since the last save)\n");
     printf("\n* Arrow Keys can be used to move the view around.\n");
     printf("* Your state is automatically saved on exit.\n");
