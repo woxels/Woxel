@@ -80,4 +80,3 @@ cc main.c -Ofast -lm -lz -lSDL2 -lGLESv2 -lEGL -o wox
 
 ## Info
 * 🎨 https://lospec.com/palette-list/resurrect-32
-* ⭐ https://dibesfer.com 
