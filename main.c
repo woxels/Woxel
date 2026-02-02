@@ -878,6 +878,9 @@ void main_loop()
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, hudmap);
         glUniform1i(hud_id, 1);
+
+		// reset
+		has_changed = 0;
     }
 
     // pass the current look pos (player position)
