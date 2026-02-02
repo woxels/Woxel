@@ -45,7 +45,7 @@ mat view;
 // globals
 //*************************************
 const char appTitle[] = "Woxel"; // or loxel?
-const char appVersion[] = "v1.4";
+const char appVersion[] = "v1.5";
 char openTitle[256]="Untitled";
 char *basedir, *appdir;
 SDL_Window* wnd;
