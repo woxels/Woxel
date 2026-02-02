@@ -849,8 +849,15 @@ void main_loop()
     vInv(&ipp); // <--
 
     // hud
-    drawHud(focus_mouse);
-    flipHud();
+    {
+        static float nt = 0.f;
+        if(t > nt)
+        {
+            drawHud(focus_mouse);
+            flipHud();
+            nt = t+0.1f; // limit hud to 10fps
+        }
+    }
 
     // has changed?
     if(has_changed == 1)
