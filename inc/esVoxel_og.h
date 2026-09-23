@@ -4,18 +4,12 @@
          & Test_User 	   (notabug.org/test_user)
         	August 2023
 
-	esVoxel.h v5.1 (glsl ray-tracing)
+	esVoxel.h v5.0 (glsl ray-tracing)
 --------------------------------------------------
 
     A pretty good color converter: https://www.easyrgb.com/en/convert.php
 
-    This version uses ray tracing in an OpenGL ES 2.0 shader to render a volume of voxels.
-
-    v5.1:
-        - Safe DDA (no NaN on axis-aligned rays, no float == face test)
-        - Texel-center voxel lookups + reciprocal UV math
-        - AABB slab entry instead of the unrolled outside-volume branch
-        - esReLoadTextureA updates voxelmap via glTexSubImage2D
+    This version uses ray tracing in an OpenGL 1.0 shader to render a volume of voxels.
 
     Requires:
         - vec.h: https://gist.github.com/mrbid/77a92019e1ab8b86109bf103166bd04e
@@ -113,12 +107,9 @@ GLuint esLoadTextureA(const GLuint w, const GLuint h, const unsigned char* data,
 }
 GLuint esReLoadTextureA(const GLuint w, const GLuint h, const unsigned char* data, const GLuint linear)
 {
-    /* Same signature as v5.0 so main.c does not need changes.
-       The old body bound an uninitialised GLuint. Use the existing
-       voxelmap and replace texels in-place instead of reallocating. */
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glBindTexture(GL_TEXTURE_2D, voxelmap);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, (GLsizei)w, (GLsizei)h, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    GLuint textureId;
+    glBindTexture(GL_TEXTURE_2D, textureId);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     if(linear == 0)
@@ -131,7 +122,7 @@ GLuint esReLoadTextureA(const GLuint w, const GLuint h, const unsigned char* dat
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     }
-    return voxelmap;
+    return textureId;
 }
 
 //*************************************
@@ -140,156 +131,267 @@ GLuint esReLoadTextureA(const GLuint w, const GLuint h, const unsigned char* dat
 const GLchar* v0 =
 	"#version 100\n"
 	"attribute vec2 position;\n"
+
 	"uniform vec2 scale;\n"
 	"uniform vec3 view[3];\n"
+
 	"varying vec3 ray_dir;\n"
 	"varying vec2 screen_pos;\n"
+
 	"void main()\n"
 	"{\n"
 		"vec3 forward = view[2];\n"
 		"vec3 up      = view[1];\n"
 		"vec3 right   = view[0];\n"
-		"ray_dir = forward + (up * (position.y * scale.y)) + (right * (position.x * scale.x));\n"
+
+		"ray_dir = forward + (up*(position.y * scale.y)) + (right*(position.x * scale.x));\n"
+
 		"screen_pos = vec2((position.x * 0.5) + 0.5, ((-position.y) * 0.5) + 0.5);\n"
-		"gl_Position = vec4(position, 0.0, 1.0);\n"
+		"gl_Position = vec4(position, 1.0, 1.0);\n"
 	"}\n";
 
 const GLchar* f0 =
 	"#version 100\n"
 	"precision highp float;\n"
+
 	"varying vec3 ray_dir;\n"
 	"varying vec2 screen_pos;\n"
-	"uniform sampler2D voxels;\n"
+
+	"uniform sampler2D voxels;\n" // no dynamic array indexing? fine, dynamic not-array indexing it is
 	"uniform sampler2D hud;\n"
-	"uniform vec3 look_pos;\n"
 
-	/* Packing matches PTI(x,y,z) = z*16384 + y*128 + x
-	   dumped into a 1024x2048 texture as texel(tx,ty) = voxels[tx*2048 + ty]
-	   tx = z*8 + floor(y/16),  ty = (y%16)*128 + x */
-	"vec4 voxel_at(vec3 p)\n"
+	"uniform vec3 look_pos;\n" // for where to start
+
+	"vec4 voxel_at(float z, float y, float x)\n"
 	"{\n"
-		"p = floor(p + 0.5);\n"
-		"float yhi = floor(p.y * 0.0625);\n"
-		"float ylo = p.y - yhi * 16.0;\n"
-		"vec2 uv;\n"
-		"uv.x = (p.z * 8.0 + yhi + 0.5) * 0.0009765625;\n"
-		"uv.y = (ylo * 128.0 + p.x + 0.5) * 0.00048828125;\n"
-		"return texture2D(voxels, uv);\n"
+		"x = floor(x + 0.5);\n"
+		"y = floor(y + 0.5);\n"
+		"z = floor(z + 0.5);\n"
+
+		"float ysplithigh = floor(y / 16.0);\n" // can inverse 16.0 as well v
+		"float ysplitlow = y - (ysplithigh * 16.0);\n"
+
+		"vec2 index;\n"
+		"index.x = ((x * 8.0) + ysplithigh) / 1024.0;\n" // TODO: rm the division
+		"index.y = ((ysplitlow * 128.0) + z) / 2048.0;\n" // ^
+
+		"return texture2D(voxels, index);\n"
 	"}\n"
 
-	/* Far faces of the 128^3 canvas — this is the “background cube”. */
-	"vec4 volume_bg(vec3 pos, float blue)\n"
+	"void ray()\n"
 	"{\n"
-		"return vec4(screen_pos, blue, 1.0) * max(1.0 - distance(look_pos, pos) * 0.002590674, 0.6);\n"
-	"}\n"
+		"vec3 pos = look_pos;\n"
+		"vec4 maxdist;\n"
+		"int index;\n"
 
-	"vec4 trace(vec3 ro, vec3 rd)\n"
-	"{\n"
-		"rd.x = abs(rd.x) < 1.0e-8 ? (rd.x < 0.0 ? -1.0e-8 : 1.0e-8) : rd.x;\n"
-		"rd.y = abs(rd.y) < 1.0e-8 ? (rd.y < 0.0 ? -1.0e-8 : 1.0e-8) : rd.y;\n"
-		"rd.z = abs(rd.z) < 1.0e-8 ? (rd.z < 0.0 ? -1.0e-8 : 1.0e-8) : rd.z;\n"
+		"vec3 dir = vec3("
+			"ray_dir.x >= 0.0 ? 1.0 : -1.0,"
+			"ray_dir.y >= 0.0 ? 1.0 : -1.0,"
+			"ray_dir.z >= 0.0 ? 1.0 : -1.0"
+		");\n"
 
-		"vec3 s = vec3(rd.x >= 0.0 ? 1.0 : -1.0, rd.y >= 0.0 ? 1.0 : -1.0, rd.z >= 0.0 ? 1.0 : -1.0);\n"
-		"vec3 delta = abs(1.0 / rd);\n"
-		"vec3 halfs = s * 0.5;\n"
-		"vec3 pos = ro;\n"
-		"vec3 side;\n"
-		"vec4 albedo;\n"
-		"float face = 1.0;\n"
+		"vec3 dir2 = vec3("
+			"dir.x * 0.5,"
+			"dir.y * 0.5,"
+			"dir.z * 0.5"
+		");\n"
 
-		/* Slab vs AABB [-0.5, 127.5]. Same bounds the original unrolled. */
+		"vec3 dist_per = vec3("
+			"dir.x / ray_dir.x,"
+			"dir.y / ray_dir.y,"
+			"dir.z / ray_dir.z"
+		");\n"
+
+		"vec3 dist_remaining = vec3(" // maybe move initialization to an else in this next section
+			"(((dir.x + 1.0) * 0.5) - ((pos.x + 0.5) - floor(pos.x  + 0.5))) / ray_dir.x,"
+			"(((dir.y + 1.0) * 0.5) - ((pos.y + 0.5) - floor(pos.y  + 0.5))) / ray_dir.y,"
+			"(((dir.z + 1.0) * 0.5) - ((pos.z + 0.5) - floor(pos.z  + 0.5))) / ray_dir.z"
+		");\n"
+
 		"if (pos.x < -0.5 || pos.x > 127.5 || pos.y < -0.5 || pos.y > 127.5 || pos.z < -0.5 || pos.z > 127.5) {\n"
-			"vec3 t1 = (-0.5 - pos) / rd;\n"
-			"vec3 t2 = (127.5 - pos) / rd;\n"
-			"vec3 tsm = min(t1, t2);\n"
-			"vec3 tlg = max(t1, t2);\n"
-			"float tenter = max(max(tsm.x, tsm.y), tsm.z);\n"
-			"float texit  = min(min(tlg.x, tlg.y), tlg.z);\n"
-			"if (texit < 0.0 || tenter > texit || tenter < 0.0) {\n"
-				"return vec4(screen_pos, 0.5, 1.0);\n"
+			"if (pos.x < -0.5) {\n"
+				"maxdist.x = -((pos.x + 0.5) / ray_dir.x);\n"
+				"if (maxdist.x < 0.0) {\n"
+					"gl_FragColor = vec4(screen_pos, 0.5, 1.0);\n"
+					"return;\n"
+				"}\n"
+			"} else if (pos.x > 127.5) {\n"
+				"maxdist.x = -((pos.x - 127.5) / ray_dir.x);\n"
+				"if (maxdist.x < 0.0) {\n"
+					"gl_FragColor = vec4(screen_pos, 0.5, 1.0);\n"
+					"return;\n"
+				"}\n"
+			"} else {\n"
+				"maxdist.x = 0.0;\n"
 			"}\n"
-			"pos += rd * tenter;\n"
 
-			/* Which plane we entered on — sample that first interior cell. */
-			"vec3 ad = abs(vec3(tenter) - tsm);\n"
-			"side = ((s * 0.5 + 0.5) - (pos + 0.5 - floor(pos + 0.5))) / rd;\n"
-			"if (ad.x <= ad.y && ad.x <= ad.z) {\n"
-				"if (pos.y < -0.5 || pos.y > 127.5 || pos.z < -0.5 || pos.z > 127.5) {\n"
-					"return vec4(screen_pos, 0.0, 1.0);\n"
+			"if (pos.y < -0.5) {\n"
+				"maxdist.y = -((pos.y + 0.5) / ray_dir.y);\n"
+				"if (maxdist.y < 0.0) {\n"
+					"gl_FragColor = vec4(screen_pos, 0.5, 1.0);\n"
+					"return;\n"
 				"}\n"
-				"side.x = delta.x;\n"
-				"face = 0.9;\n"
-				"albedo = voxel_at(vec3(pos.x + halfs.x, pos.y, pos.z));\n"
-			"} else if (ad.y <= ad.z) {\n"
+			"} else if (pos.y > 127.5) {\n"
+				"maxdist.y = -((pos.y - 127.5) / ray_dir.y);\n"
+				"if (maxdist.y < 0.0) {\n"
+					"gl_FragColor = vec4(screen_pos, 0.5, 1.0);\n"
+					"return;\n"
+				"}\n"
+			"} else {\n"
+				"maxdist.y = 0.0;\n"
+			"}\n"
+
+			"if (pos.z < -0.5) {\n"
+				"maxdist.z = -((pos.z + 0.5) / ray_dir.z);\n"
+				"if (maxdist.z < 0.0) {\n"
+					"gl_FragColor = vec4(screen_pos, 0.5, 1.0);\n"
+					"return;\n"
+				"}\n"
+			"} else if (pos.z > 127.5) {\n"
+				"maxdist.z = -((pos.z - 127.5) / ray_dir.z);\n"
+				"if (maxdist.z < 0.0) {\n"
+					"gl_FragColor = vec4(screen_pos, 0.5, 1.0);\n"
+					"return;\n"
+				"}\n"
+			"} else {\n"
+				"maxdist.z = 0.0;\n"
+			"}\n"
+
+			"maxdist.w = maxdist.x;\n"
+			"if (maxdist.w < maxdist.y) {\n"
+				"maxdist.w = maxdist.y;\n"
+			"}\n"
+			"if (maxdist.w < maxdist.z) {\n"
+				"maxdist.w = maxdist.z;\n"
+			"}\n"
+
+			"pos.x += maxdist.w * ray_dir.x;\n"
+			"pos.y += maxdist.w * ray_dir.y;\n"
+			"pos.z += maxdist.w * ray_dir.z;\n"
+
+			"dist_remaining = vec3("
+				"(((dir.x + 1.0) * 0.5) - ((pos.x + 0.5) - floor(pos.x  + 0.5))) / ray_dir.x,"
+				"(((dir.y + 1.0) * 0.5) - ((pos.y + 0.5) - floor(pos.y  + 0.5))) / ray_dir.y,"
+				"(((dir.z + 1.0) * 0.5) - ((pos.z + 0.5) - floor(pos.z  + 0.5))) / ray_dir.z"
+			");\n"
+
+			"if (maxdist.w == maxdist.x) {\n"
+				"if (pos.y < -0.5 || pos.y > 127.5 || pos.z < -0.5 || pos.z > 127.5) {\n" // edge cases, literally, might have issues with float inaccuracies, but they should be nearly impossible to reach...
+					"gl_FragColor = vec4(screen_pos, 0.0, 1.0);\n"
+					"return;\n"
+				"}\n"
+
+				"dist_remaining.x = dist_per.x;\n"
+
+				"vec4 color = voxel_at(pos.x + dir2.x, pos.y, pos.z);\n"
+				"if (color.a != 0.0) {\n"
+					"gl_FragColor = color;\n"
+					"return;\n"
+				"}\n"
+			"} else if (maxdist.w == maxdist.y) {\n"
 				"if (pos.x < -0.5 || pos.x > 127.5 || pos.z < -0.5 || pos.z > 127.5) {\n"
-					"return vec4(screen_pos, 0.0, 1.0);\n"
+					"gl_FragColor = vec4(screen_pos, 0.0, 1.0);\n"
+					"return;\n"
 				"}\n"
-				"side.y = delta.y;\n"
-				"face = 1.0;\n"
-				"albedo = voxel_at(vec3(pos.x, pos.y + halfs.y, pos.z));\n"
+
+				"dist_remaining.y = dist_per.y;\n"
+
+				"vec4 color = voxel_at(pos.x, pos.y + dir2.y, pos.z);\n"
+				"if (color.a != 0.0) {\n"
+					"gl_FragColor = color;\n"
+					"return;\n"
+				"}\n"
 			"} else {\n"
 				"if (pos.x < -0.5 || pos.x > 127.5 || pos.y < -0.5 || pos.y > 127.5) {\n"
-					"return vec4(screen_pos, 0.0, 1.0);\n"
+					"gl_FragColor = vec4(screen_pos, 0.0, 1.0);\n"
+					"return;\n"
 				"}\n"
-				"side.z = delta.z;\n"
-				"face = 0.8;\n"
-				"albedo = voxel_at(vec3(pos.x, pos.y, pos.z + halfs.z));\n"
+
+				"dist_remaining.z = dist_per.z;\n"
+
+				"vec4 color = voxel_at(pos.x, pos.y, pos.z + dir2.z);\n"
+				"if (color.a != 0.0) {\n"
+					"gl_FragColor = color;\n"
+					"return;\n"
+				"}\n"
 			"}\n"
-			"if (albedo.a != 0.0) {\n"
-				"return albedo * face;\n"
-			"}\n"
-		"} else {\n"
-			"side = ((s * 0.5 + 0.5) - (pos + 0.5 - floor(pos + 0.5))) / rd;\n"
 		"}\n"
 
-		"for (int i = 0; i < 512; i++) {\n"
-			"if (side.x < side.y && side.x < side.z) {\n"
-				"pos += rd * side.x;\n"
-				"side.y -= side.x;\n"
-				"side.z -= side.x;\n"
-				"side.x = delta.x;\n"
-				"face = 0.9;\n"
-				"if (pos.x + s.x > 127.7 || pos.x + s.x < -0.7) {\n"
-					"return volume_bg(pos, 1.0);\n"
+
+
+		"vec3 checkpos;\n"
+		"float multiplier;\n"
+		"for(int i = 0; i < 512; i++){\n"
+			"if (dist_remaining.x < dist_remaining.y && dist_remaining.x < dist_remaining.z) {\n"
+				"pos.x += ray_dir.x * dist_remaining.x;\n"
+				"pos.y += ray_dir.y * dist_remaining.x;\n"
+				"pos.z += ray_dir.z * dist_remaining.x;\n"
+
+				"dist_remaining.y -= dist_remaining.x;\n"
+				"dist_remaining.z -= dist_remaining.x;\n"
+
+				"dist_remaining.x = dist_per.x;\n"
+
+				"if (pos.x + dir.x > 127.7 || pos.x + dir.x < -0.7) {\n"
+					"gl_FragColor = vec4(screen_pos, 1.0, 1.0) * max((1.0-(distance(look_pos, pos) * 0.002590674)), 0.6);\n"
+					"return;\n"
 				"}\n"
-				"albedo = voxel_at(vec3(pos.x + halfs.x, pos.y, pos.z));\n"
-			"} else if (side.y < side.z) {\n"
-				"pos += rd * side.y;\n"
-				"side.x -= side.y;\n"
-				"side.z -= side.y;\n"
-				"side.y = delta.y;\n"
-				"face = 1.0;\n"
-				"if (pos.y + s.y > 127.7 || pos.y + s.y < -0.7) {\n"
-					"return volume_bg(pos, 1.0);\n"
+
+				"checkpos = vec3(pos.x + dir2.x, pos.y, pos.z);\n"
+				"multiplier = 0.9;\n"
+			"} else if (dist_remaining.y < dist_remaining.z) {\n"
+				"pos.x += ray_dir.x * dist_remaining.y;\n"
+				"pos.y += ray_dir.y * dist_remaining.y;\n"
+				"pos.z += ray_dir.z * dist_remaining.y;\n"
+
+				"dist_remaining.x -= dist_remaining.y;\n"
+				"dist_remaining.z -= dist_remaining.y;\n"
+
+				"dist_remaining.y = dist_per.y;\n"
+
+				"if (pos.y + dir.y > 127.7 || pos.y + dir.y < -0.7) {\n"
+					"gl_FragColor = vec4(screen_pos, 1.0, 1.0) * max((1.0-(distance(look_pos, pos) * 0.002590674)), 0.6);\n"
+					"return;\n"
 				"}\n"
-				"albedo = voxel_at(vec3(pos.x, pos.y + halfs.y, pos.z));\n"
+
+				"checkpos = vec3(pos.x, pos.y + dir2.y, pos.z);\n"
+				"multiplier = 1.0;\n"
 			"} else {\n"
-				"pos += rd * side.z;\n"
-				"side.x -= side.z;\n"
-				"side.y -= side.z;\n"
-				"side.z = delta.z;\n"
-				"face = 0.8;\n"
-				"if (pos.z + s.z > 127.7 || pos.z + s.z < -0.7) {\n"
-					"return volume_bg(pos, 1.0);\n"
+				"pos.x += ray_dir.x * dist_remaining.z;\n"
+				"pos.y += ray_dir.y * dist_remaining.z;\n"
+				"pos.z += ray_dir.z * dist_remaining.z;\n"
+
+				"dist_remaining.x -= dist_remaining.z;\n"
+				"dist_remaining.y -= dist_remaining.z;\n"
+
+				"dist_remaining.z = dist_per.z;\n"
+
+				"if (pos.z + dir.z > 127.7 || pos.z + dir.z < -0.7) {\n"
+					"gl_FragColor = vec4(screen_pos, 1.0, 1.0) * max((1.0-(distance(look_pos, pos) * 0.002590674)), 0.6);\n"
+					"return;\n"
 				"}\n"
-				"albedo = voxel_at(vec3(pos.x, pos.y, pos.z + halfs.z));\n"
+
+				"checkpos = vec3(pos.x, pos.y, pos.z + dir2.z);\n"
+				"multiplier = 0.8;\n"
 			"}\n"
-			"if (albedo.a != 0.0) {\n"
-				"return albedo * face;\n"
+
+			"vec4 color = voxel_at(checkpos.x, checkpos.y, checkpos.z);\n"
+			"if (color.a != 0.0) {\n"
+				"gl_FragColor = color * multiplier;\n"
+				"return;\n"
 			"}\n"
 		"}\n"
-		"return volume_bg(pos, 1.0);\n"
 	"}\n"
 
 	"void main()\n"
 	"{\n"
-		"vec4 overlay = texture2D(hud, screen_pos);\n"
-		"if (overlay.a == 1.0) {\n"
-			"gl_FragColor = overlay;\n"
-			"return;\n"
+		"vec4 color = texture2D(hud, screen_pos);\n"
+		"if (color.a != 1.0) {\n"
+			"ray();\n"
+			"gl_FragColor.rgb = mix(gl_FragColor.rgb, color.rgb, color.a);\n"
+		"} else {\n"
+			"gl_FragColor = color;\n"
 		"}\n"
-		"gl_FragColor = trace(look_pos, ray_dir);\n"
-		"gl_FragColor.rgb = mix(gl_FragColor.rgb, overlay.rgb, overlay.a);\n"
 	"}\n";
 
 ///
@@ -322,8 +424,8 @@ void makeHud()
     if (compiled != GL_TRUE)
     {
         GLsizei log_length = 0;
-        GLchar message[4096];
-        glGetShaderInfoLog(vertexShader, 4096, &log_length, message);
+        GLchar message[1024*1024];
+        glGetShaderInfoLog(vertexShader, 1024*1024, &log_length, message);
         write(2, "Vertex error: ", 14);
         write(2, message, log_length);
         write(2, "\r\n", 2);
@@ -340,8 +442,8 @@ void makeHud()
     if (compiled != GL_TRUE)
     {
         GLsizei log_length = 0;
-        GLchar message[4096];
-        glGetShaderInfoLog(fragmentShader, 4096, &log_length, message);
+        GLchar message[1024*1024];
+        glGetShaderInfoLog(fragmentShader, 1024*1024, &log_length, message);
         write(2, "Fragment error: ", 16);
         write(2, message, log_length);
         write(2, "\r\n", 2);
@@ -353,23 +455,6 @@ void makeHud()
         glAttachShader(shdHud, vertexShader);
         glAttachShader(shdHud, fragmentShader);
     glLinkProgram(shdHud);
-	glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
-
-#ifdef __linux__
-    GLint linked;
-    glGetProgramiv(shdHud, GL_LINK_STATUS, &linked);
-    if (linked != GL_TRUE)
-    {
-        GLsizei log_length = 0;
-        GLchar message[4096];
-        glGetProgramInfoLog(shdHud, 4096, &log_length, message);
-        write(2, "Link error: ", 12);
-        write(2, message, log_length);
-        write(2, "\r\n", 2);
-        exit(1);
-    }
-#endif
 
     shdHud_position   = glGetAttribLocation(shdHud,  "position");
     //<><><><><><><><><><><><><><><><><><><><><><><><><><><><><>

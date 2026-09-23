@@ -8,6 +8,8 @@
     Colour Converter: https://www.easyrgb.com
 */
 #include "inc/excess.h"
+#include <string.h>
+#include <stdlib.h>
 //#define BENCH_FPS
 void WOX_QUIT()
 {
@@ -45,6 +47,284 @@ static SDL_HitTestResult SDLCALL hitTest(SDL_Window *window, const SDL_Point *pt
     return SDL_HITTEST_NORMAL;
 }
 void drawHud(uint type);
+
+//*************************************
+// Base64 import / export (from web main2.c F10/F11)
+// Web version gzip/zlib-compresses game_state then Base64-encodes it
+// so the scene can be copied, shared, and pasted back.
+//*************************************
+static const char b64_alphabet[] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+static char* b64_encode(const unsigned char* src, size_t len, size_t* out_len)
+{
+    static const char pad = '=';
+    const size_t olen = 4 * ((len + 2) / 3);
+    char* out = (char*)malloc(olen + 1);
+    if(out == NULL){return NULL;}
+    size_t i = 0, j = 0;
+    while(i + 2 < len)
+    {
+        const unsigned int n = ((unsigned int)src[i] << 16) |
+                               ((unsigned int)src[i+1] << 8) |
+                               (unsigned int)src[i+2];
+        out[j++] = b64_alphabet[(n >> 18) & 63];
+        out[j++] = b64_alphabet[(n >> 12) & 63];
+        out[j++] = b64_alphabet[(n >> 6) & 63];
+        out[j++] = b64_alphabet[n & 63];
+        i += 3;
+    }
+    if(i < len)
+    {
+        unsigned int n = ((unsigned int)src[i] << 16);
+        if(i + 1 < len){n |= ((unsigned int)src[i+1] << 8);}
+        out[j++] = b64_alphabet[(n >> 18) & 63];
+        out[j++] = b64_alphabet[(n >> 12) & 63];
+        if(i + 1 < len)
+        {
+            out[j++] = b64_alphabet[(n >> 6) & 63];
+            out[j++] = pad;
+        }
+        else
+        {
+            out[j++] = pad;
+            out[j++] = pad;
+        }
+    }
+    out[j] = 0;
+    if(out_len){*out_len = j;}
+    return out;
+}
+
+static unsigned char* b64_decode(const char* src, size_t len, size_t* out_len)
+{
+    int dec[256];
+    for(int i = 0; i < 256; i++){dec[i] = -1;}
+    for(int i = 0; i < 64; i++){dec[(unsigned char)b64_alphabet[i]] = i;}
+    dec[(unsigned char)'='] = 0;
+
+    char* clean = (char*)malloc(len + 1);
+    if(clean == NULL){return NULL;}
+    size_t cl = 0;
+    for(size_t i = 0; i < len; i++)
+    {
+        const unsigned char c = (unsigned char)src[i];
+        if(c == ' ' || c == '\n' || c == '\r' || c == '\t'){continue;}
+        clean[cl++] = (char)c;
+    }
+    clean[cl] = 0;
+    if(cl == 0 || (cl % 4) != 0)
+    {
+        free(clean);
+        return NULL;
+    }
+
+    size_t pads = 0;
+    if(clean[cl-1] == '='){pads++;}
+    if(clean[cl-2] == '='){pads++;}
+
+    const size_t olen = (cl / 4) * 3 - pads;
+    unsigned char* out = (unsigned char*)malloc(olen + 1);
+    if(out == NULL){free(clean); return NULL;}
+
+    size_t j = 0;
+    for(size_t i = 0; i < cl; i += 4)
+    {
+        const int a = dec[(unsigned char)clean[i]];
+        const int b = dec[(unsigned char)clean[i+1]];
+        const int c = dec[(unsigned char)clean[i+2]];
+        const int d = dec[(unsigned char)clean[i+3]];
+        if(a < 0 || b < 0 || c < 0 || d < 0)
+        {
+            free(clean);
+            free(out);
+            return NULL;
+        }
+        const unsigned int n = ((unsigned int)a << 18) |
+                               ((unsigned int)b << 12) |
+                               ((unsigned int)c << 6) |
+                               (unsigned int)d;
+        if(j < olen){out[j++] = (unsigned char)((n >> 16) & 255);}
+        if(j < olen){out[j++] = (unsigned char)((n >> 8) & 255);}
+        if(j < olen){out[j++] = (unsigned char)(n & 255);}
+    }
+    free(clean);
+    if(out_len){*out_len = olen;}
+    return out;
+}
+
+static int b64_is_filepath(const char* s)
+{
+    if(s == NULL || s[0] == 0){return 0;}
+    if(s[0] == '/' || s[0] == '.' || s[0] == '~'){return 1;}
+    if(strchr(s, '/') != NULL || strchr(s, '\\') != NULL){return 1;}
+#ifdef _WIN32
+    if(s[0] != 0 && s[1] == ':'){return 1;}
+#endif
+    return 0;
+}
+
+static void b64_resolve_path(char* out, size_t outsz, const char* path)
+{
+    const char* src = (path != NULL && path[0] != 0) ? path : openTitle;
+    if(b64_is_filepath(src))
+    {
+        snprintf(out, outsz, "%s", src);
+        return;
+    }
+    snprintf(out, outsz, "%s%s", appdir ? appdir : "", src);
+}
+
+uint saveBase64(const char* path)
+{
+    char file[1024];
+    b64_resolve_path(file, sizeof(file), path);
+
+    uLongf zlen = compressBound(sizeof(game_state));
+    unsigned char* zbuf = (unsigned char*)malloc(zlen);
+    if(zbuf == NULL)
+    {
+        printf("ERROR: saveBase64() out of memory.\n");
+        return 0;
+    }
+    const int zr = compress2(zbuf, &zlen, (const Bytef*)&g, sizeof(game_state), 9);
+    if(zr != Z_OK)
+    {
+        free(zbuf);
+        printf("ERROR: saveBase64() compression failed (%d).\n", zr);
+        return 0;
+    }
+
+    size_t blen = 0;
+    char* b64 = b64_encode(zbuf, zlen, &blen);
+    free(zbuf);
+    if(b64 == NULL)
+    {
+        printf("ERROR: saveBase64() encode failed.\n");
+        return 0;
+    }
+
+    FILE* f = fopen(file, "w");
+    if(f == NULL)
+    {
+        free(b64);
+        printf("ERROR: saveBase64() could not write: %s\n", file);
+        return 0;
+    }
+    fwrite(b64, 1, blen, f);
+    fputc('\n', f);
+    fclose(f);
+    free(b64);
+
+    char tmp[16];
+    timestamp(tmp);
+    printf("[%s] Exported Base64: %s (%u voxels)\n", tmp, file, placedVoxels());
+    snprintf(warnm, sizeof(warnm), "Exported Base64.");
+    wti = t + 2.f;
+    return 1;
+}
+
+uint loadBase64(const char* path)
+{
+    char file[1024];
+    b64_resolve_path(file, sizeof(file), path);
+
+    FILE* f = fopen(file, "rb");
+    if(f == NULL)
+    {
+        const size_t n = strlen(file);
+        if(n < 4 || (strcmp(file + n - 4, ".b64") != 0 && strcmp(file + n - 4, ".B64") != 0))
+        {
+            char alt[1024];
+            snprintf(alt, sizeof(alt), "%s.b64", file);
+            f = fopen(alt, "rb");
+            if(f != NULL){snprintf(file, sizeof(file), "%s", alt);}
+        }
+    }
+    if(f == NULL)
+    {
+        printf("ERROR: loadBase64() could not open: %s\n", file);
+        snprintf(warnm, sizeof(warnm), "Invalid Base64 data");
+        wti = t + 2.f;
+        return 0;
+    }
+    fseek(f, 0, SEEK_END);
+    const long flen = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if(flen <= 0)
+    {
+        fclose(f);
+        printf("ERROR: loadBase64() empty file: %s\n", file);
+        snprintf(warnm, sizeof(warnm), "Invalid Base64 data");
+        wti = t + 2.f;
+        return 0;
+    }
+    char* raw = (char*)malloc((size_t)flen + 1);
+    if(raw == NULL){fclose(f); return 0;}
+    const size_t nread = fread(raw, 1, (size_t)flen, f);
+    fclose(f);
+    raw[nread] = 0;
+
+    size_t zlen = 0;
+    unsigned char* zbuf = b64_decode(raw, nread, &zlen);
+    free(raw);
+    if(zbuf == NULL || zlen == 0)
+    {
+        printf("ERROR: loadBase64() invalid Base64 data.\n");
+        snprintf(warnm, sizeof(warnm), "Invalid Base64 data");
+        wti = t + 2.f;
+        if(zbuf){free(zbuf);}
+        return 0;
+    }
+
+    game_state ng;
+    memset(&ng, 0, sizeof(ng));
+    uLongf dlen = sizeof(game_state);
+    int zr = uncompress((Bytef*)&ng, &dlen, zbuf, zlen);
+    if(zr != Z_OK)
+    {
+        z_stream strm;
+        memset(&strm, 0, sizeof(strm));
+        strm.next_in = zbuf;
+        strm.avail_in = (uInt)zlen;
+        strm.next_out = (Bytef*)&ng;
+        strm.avail_out = (uInt)sizeof(game_state);
+        if(inflateInit2(&strm, 32 + MAX_WBITS) == Z_OK)
+        {
+            const int ir = inflate(&strm, Z_FINISH);
+            dlen = strm.total_out;
+            inflateEnd(&strm);
+            zr = (ir == Z_STREAM_END) ? Z_OK : ir;
+        }
+    }
+    if(zr != Z_OK && zlen == sizeof(game_state))
+    {
+        memcpy(&ng, zbuf, sizeof(game_state));
+        dlen = sizeof(game_state);
+        zr = Z_OK;
+    }
+    free(zbuf);
+    if(zr != Z_OK || dlen != sizeof(game_state))
+    {
+        printf("ERROR: loadBase64() decompression failed (%d).\n", zr);
+        snprintf(warnm, sizeof(warnm), "Decompression failed - corrupted data");
+        wti = t + 2.f;
+        return 0;
+    }
+
+    memcpy(&g, &ng, sizeof(game_state));
+    fks = (g.ms == g.cms);
+    has_changed = 1;
+    if(sHud != NULL){updateSelectColor();}
+
+    char tmp[16];
+    timestamp(tmp);
+    printf("[%s] Imported Base64: %s (%u voxels)\n", tmp, file, placedVoxels());
+    snprintf(warnm, sizeof(warnm), "Imported Base64.");
+    wti = t + 2.f;
+    return 1;
+}
+
 void main_loop()
 {
     // time delta
@@ -391,6 +671,14 @@ void main_loop()
                 else if(event.key.keysym.sym == SDLK_F8)
                 {
                     loadState(openTitle, 0);
+                }
+                else if(event.key.keysym.sym == SDLK_F10)
+                {
+                    loadBase64(NULL);
+                }
+                else if(event.key.keysym.sym == SDLK_F11)
+                {
+                    saveBase64(NULL);
                 }
                 else if(event.key.keysym.sym == SDLK_p)
                 {
@@ -992,8 +1280,8 @@ void drawHud(const uint type)
         // center hud
         const int left = winw2-177;
         int top = winh2-152;
-        SDL_FillRect(sHud, &(SDL_Rect){winw2-193, top-3, 382, 303}, 0x33FFFFFF);
-        SDL_FillRect(sHud, &(SDL_Rect){winw2-190, top, 376, 297}, 0xCC000000);
+        SDL_FillRect(sHud, &(SDL_Rect){winw2-193, top-3, 382, 323}, 0x33FFFFFF);
+        SDL_FillRect(sHud, &(SDL_Rect){winw2-190, top, 376, 317}, 0xCC000000);
         int a = drawText(sHud, "Woxel", winw2-15, top+11, 3);
         a = drawText(sHud, appVersion, left+330, top+11, 4);
         a = drawText(sHud, "woxels.github.io", left, top+11, 4);
@@ -1066,7 +1354,15 @@ void drawHud(const uint type)
         a = drawText(sHud, "F8 ", left, top, 2);
         drawText(sHud, "Load. Will erase what you have done since the last save.", a, top, 1);
 
-        top += 22;
+        top += 11;
+        a = drawText(sHud, "F10 ", left, top, 2);
+        drawText(sHud, "Import voxel scene as Base64.", a, top, 1);
+
+        top += 11;
+        a = drawText(sHud, "F11 ", left, top, 2);
+        drawText(sHud, "Export voxel scene as Base64.", a, top, 1);
+
+        top += 21;
         drawText(sHud, "Check the console output for more information.", left, top, 3);
 
         for(uint i = 0; i < 16; i++)
@@ -1279,6 +1575,8 @@ int main(int argc, char** argv)
     printf("F2 = Toggle HUD visibility.\n");
     printf("F3 = Save. (auto saves on exit, backup made if idle for 3 mins)\n");
     printf("F8 = Load. (will erase what you have done since the last save)\n");
+    printf("F10 = Import voxel scene as Base64.\n");
+    printf("F11 = Export voxel scene as Base64.\n");
     printf("\n* Arrow Keys can be used to move the view around.\n");
     printf("* Your state is automatically saved on exit.\n");
     printf("\nConsole Arguments:\n");
@@ -1290,8 +1588,11 @@ int main(int argc, char** argv)
     printf("color on each new line, 32 colors maximum. e.g; \"#00FFFF\".\n\n");
     printf("To load from file: ./wox loadgz <file_path>\n");
     printf("e.g; ./wox loadgz /home/user/file.wox.gz\n\n");
-    printf("To export: ./wox export <project_name> <option: wox,txt,vv,ply> <export_path>\n");
+    printf("To load Base64: ./wox loadb64 <file_path>\n");
+    printf("e.g; ./wox loadb64 /home/user/file.b64\n\n");
+    printf("To export: ./wox export <project_name> <option: wox,txt,vv,ply,b64> <export_path>\n");
     printf("e.g; ./wox export txt /home/user/file.txt\n");
+    printf("e.g; ./wox export b64 /home/user/file.b64\n");
     printf("When exporting as ply you will want to merge vertices by distance in Blender\nor `Cleaning and Repairing > Merge Close Vertices` in MeshLab.\n\n");
     printf("Find more color palettes at; https://lospec.com/palette-list\n");
     printf("You can use any palette upto 32 colors. But don't use #000000 (Black)\nin your color palette as it will terminate at that color.\n\n");
@@ -1309,6 +1610,7 @@ int main(int argc, char** argv)
     // argv
     char export_path[1024] = {0};
     uint export_type = 0;
+    uint load_b64 = 0;
     if(argc >= 2 && strlen(argv[1]) < 256)
     {
         sprintf(openTitle, "%s", argv[1]);
@@ -1318,17 +1620,23 @@ int main(int argc, char** argv)
         sprintf(openTitle, "%s", argv[2]);
         load_state = 1;
     }
+    if(argc >= 3 && strcmp(argv[1], "loadb64") == 0 && strlen(argv[2]) < 256)
+    {
+        sprintf(openTitle, "%s", argv[2]);
+        load_b64 = 1;
+    }
     if(argc >= 5 && strcmp(argv[1], "export") == 0 && strlen(argv[2]) < 256 && strlen(argv[4]) < 1024)
     {
         sprintf(openTitle, "%s", argv[2]);
         if     (strcmp(argv[3], "txt") == 0){export_type=1;}
         else if(strcmp(argv[3], "vv") == 0){export_type=2;}
         else if(strcmp(argv[3], "ply") == 0){export_type=3;}
+        else if(strcmp(argv[3], "b64") == 0){export_type=4;}
         sprintf(export_path, "%s", argv[4]);
     }
 
     // default state
-    if(loadState(openTitle, load_state) == 0)
+    if(load_b64 ? (loadBase64(openTitle) == 0) : (loadState(openTitle, load_state) == 0))
     {
         defaultState(0);
         memset(&g.voxels, 0, max_voxels);
@@ -1416,6 +1724,7 @@ int main(int argc, char** argv)
     if(export_path[0] != 0x00)
     {
         if(export_type == 0){saveState(export_path, "", 1);}
+        if(export_type == 4){saveBase64(export_path); return 0;}
         if(export_type == 1)
         {
             FILE* f = fopen(export_path, "w");
