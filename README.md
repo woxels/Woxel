@@ -37,6 +37,8 @@ Woxel uses intuitive controls akin to Minetest and Minecraft, while providing a 
 * **F2** = Toggle HUD visibility.
 * **F3** = Save. (auto saves on exit, backup made if idle for 3 mins.)
 * **F8** = Load. (will erase what you have done since the last save)
+* **F10** = Import voxel scene as Base64.
+* **F11** = Export voxel scene as Base64.
 * **ESCAPE / TAB** = Toggle menu.
 
 ### 🖱️ Mouse locks when you click on the window, press ESCAPE / TAB to unlock the mouse.
