@@ -10,6 +10,8 @@
 #include "inc/excess.h"
 #include <string.h>
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 //#define BENCH_FPS
 void WOX_QUIT()
 {
@@ -164,15 +166,34 @@ static int b64_is_filepath(const char* s)
     return 0;
 }
 
+static void b64_mkdirs(const char* path)
+{
+    char buf[1024];
+    snprintf(buf, sizeof(buf), "%s", path);
+    for(char* p = buf + 1; *p; p++)
+    {
+        if(*p == '/' || *p == '\\')
+        {
+            *p = 0;
+            mkdir(buf, 0755);
+            *p = '/';
+        }
+    }
+}
+
 static void b64_resolve_path(char* out, size_t outsz, const char* path)
 {
-    const char* src = (path != NULL && path[0] != 0) ? path : openTitle;
-    if(b64_is_filepath(src))
+    if(path != NULL && path[0] != 0)
     {
-        snprintf(out, outsz, "%s", src);
+        snprintf(out, outsz, "%s", path);
         return;
     }
-    snprintf(out, outsz, "%s%s", appdir ? appdir : "", src);
+    if(b64_is_filepath(openTitle))
+    {
+        snprintf(out, outsz, "%s", openTitle);
+        return;
+    }
+    snprintf(out, outsz, "%s%s", appdir ? appdir : "", openTitle);
 }
 
 uint saveBase64(const char* path)
@@ -204,6 +225,7 @@ uint saveBase64(const char* path)
         return 0;
     }
 
+    b64_mkdirs(file);
     FILE* f = fopen(file, "w");
     if(f == NULL)
     {
@@ -1591,8 +1613,9 @@ int main(int argc, char** argv)
     printf("To load Base64: ./wox loadb64 <file_path>\n");
     printf("e.g; ./wox loadb64 /home/user/file.b64\n\n");
     printf("To export: ./wox export <project_name> <option: wox,txt,vv,ply,b64> <export_path>\n");
-    printf("e.g; ./wox export txt /home/user/file.txt\n");
-    printf("e.g; ./wox export b64 /home/user/file.b64\n");
+    printf("e.g; ./wox export Untitled txt ./file.txt\n");
+    printf("e.g; ./wox export Untitled b64 ./file.b64\n");
+    printf("Base64 export path is relative to the current directory.\n");
     printf("When exporting as ply you will want to merge vertices by distance in Blender\nor `Cleaning and Repairing > Merge Close Vertices` in MeshLab.\n\n");
     printf("Find more color palettes at; https://lospec.com/palette-list\n");
     printf("You can use any palette upto 32 colors. But don't use #000000 (Black)\nin your color palette as it will terminate at that color.\n\n");
@@ -1633,6 +1656,17 @@ int main(int argc, char** argv)
         else if(strcmp(argv[3], "ply") == 0){export_type=3;}
         else if(strcmp(argv[3], "b64") == 0){export_type=4;}
         sprintf(export_path, "%s", argv[4]);
+    }
+    else if(argc >= 4 && strcmp(argv[1], "export") == 0 && strlen(argv[3]) < 1024 &&
+            (strcmp(argv[2], "b64") == 0 || strcmp(argv[2], "txt") == 0 ||
+             strcmp(argv[2], "vv") == 0 || strcmp(argv[2], "ply") == 0 ||
+             strcmp(argv[2], "wox") == 0))
+    {
+        if     (strcmp(argv[2], "txt") == 0){export_type=1;}
+        else if(strcmp(argv[2], "vv") == 0){export_type=2;}
+        else if(strcmp(argv[2], "ply") == 0){export_type=3;}
+        else if(strcmp(argv[2], "b64") == 0){export_type=4;}
+        sprintf(export_path, "%s", argv[3]);
     }
 
     // default state
