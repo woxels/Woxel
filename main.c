@@ -1652,21 +1652,10 @@ int main(int argc, char** argv)
     {
         sprintf(openTitle, "%s", argv[2]);
         if     (strcmp(argv[3], "txt") == 0){export_type=1;}
-        else if(strcmp(argv[3], "vv") == 0){export_type=2;}
+        else if(strcmp(argv[3], "vv" ) == 0){export_type=2;}
         else if(strcmp(argv[3], "ply") == 0){export_type=3;}
         else if(strcmp(argv[3], "b64") == 0){export_type=4;}
         sprintf(export_path, "%s", argv[4]);
-    }
-    else if(argc >= 4 && strcmp(argv[1], "export") == 0 && strlen(argv[3]) < 1024 &&
-            (strcmp(argv[2], "b64") == 0 || strcmp(argv[2], "txt") == 0 ||
-             strcmp(argv[2], "vv") == 0 || strcmp(argv[2], "ply") == 0 ||
-             strcmp(argv[2], "wox") == 0))
-    {
-        if     (strcmp(argv[2], "txt") == 0){export_type=1;}
-        else if(strcmp(argv[2], "vv") == 0){export_type=2;}
-        else if(strcmp(argv[2], "ply") == 0){export_type=3;}
-        else if(strcmp(argv[2], "b64") == 0){export_type=4;}
-        sprintf(export_path, "%s", argv[3]);
     }
 
     // default state
