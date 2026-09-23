@@ -57,6 +57,10 @@ Woxel uses intuitive controls akin to Minetest and Minecraft, while providing a 
 * Find color palettes at; https://lospec.com/palette-list
 * You can use any palette upto 32 colors. But don't use #000000 (Black) in your color palette as it will terminate at that color.
 
+### 📂 Load Base64 from file
+* `./wox loadb64 <file_path>`
+* *e.g;* `./wox loadb64 /home/user/file.b64`
+
 ### 📂 Load `*.wox.gz` from file
 * `./wox loadgz <file_path>`
 * *e.g;* `./wox loadgz /home/user/file.wox.gz`
