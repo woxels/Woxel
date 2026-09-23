@@ -58,14 +58,34 @@ void drawHud(uint type);
 static const char b64_alphabet[] =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
+static const unsigned char b64_dtable[256] = {
+    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+    255,255,255,255,255,255,255,255,255,255,255, 62,255, 62,255, 63,
+     52, 53, 54, 55, 56, 57, 58, 59, 60, 61,255,255,255,  0,255,255,
+    255,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
+     15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,255,255,255,255,255,
+    255, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+     41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,255,255,255,255,255,
+    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255
+};
+
 static char* b64_encode(const unsigned char* src, size_t len, size_t* out_len)
 {
-    static const char pad = '=';
     const size_t olen = 4 * ((len + 2) / 3);
     char* out = (char*)malloc(olen + 1);
-    if(out == NULL){return NULL;}
+    if(!out) return NULL;
+
     size_t i = 0, j = 0;
-    while(i + 2 < len)
+    const size_t n3 = len - (len % 3);
+    while(i < n3)
     {
         const unsigned int n = ((unsigned int)src[i] << 16) |
                                ((unsigned int)src[i+1] << 8) |
@@ -79,79 +99,70 @@ static char* b64_encode(const unsigned char* src, size_t len, size_t* out_len)
     if(i < len)
     {
         unsigned int n = ((unsigned int)src[i] << 16);
-        if(i + 1 < len){n |= ((unsigned int)src[i+1] << 8);}
         out[j++] = b64_alphabet[(n >> 18) & 63];
-        out[j++] = b64_alphabet[(n >> 12) & 63];
         if(i + 1 < len)
         {
+            n |= ((unsigned int)src[i+1] << 8);
+            out[j++] = b64_alphabet[(n >> 12) & 63];
             out[j++] = b64_alphabet[(n >> 6) & 63];
-            out[j++] = pad;
+            out[j++] = '=';
         }
         else
         {
-            out[j++] = pad;
-            out[j++] = pad;
+            out[j++] = b64_alphabet[(n >> 12) & 63];
+            out[j++] = '=';
+            out[j++] = '=';
         }
     }
     out[j] = 0;
-    if(out_len){*out_len = j;}
+    if(out_len) *out_len = j;
     return out;
 }
 
 static unsigned char* b64_decode(const char* src, size_t len, size_t* out_len)
 {
-    int dec[256];
-    for(int i = 0; i < 256; i++){dec[i] = -1;}
-    for(int i = 0; i < 64; i++){dec[(unsigned char)b64_alphabet[i]] = i;}
-    dec[(unsigned char)'='] = 0;
-
-    char* clean = (char*)malloc(len + 1);
-    if(clean == NULL){return NULL;}
-    size_t cl = 0;
-    for(size_t i = 0; i < len; i++)
-    {
-        const unsigned char c = (unsigned char)src[i];
-        if(c == ' ' || c == '\n' || c == '\r' || c == '\t'){continue;}
-        clean[cl++] = (char)c;
-    }
-    clean[cl] = 0;
-    if(cl == 0 || (cl % 4) != 0)
-    {
-        free(clean);
-        return NULL;
-    }
+    while(len && (src[len-1]=='\n' || src[len-1]=='\r' ||
+                  src[len-1]==' '  || src[len-1]=='\t'))
+        len--;
+    if(len == 0 || (len & 3)) return NULL;
 
     size_t pads = 0;
-    if(clean[cl-1] == '='){pads++;}
-    if(clean[cl-2] == '='){pads++;}
+    if(src[len-1] == '=') pads++;
+    if(src[len-2] == '=') pads++;
 
-    const size_t olen = (cl / 4) * 3 - pads;
+    const size_t olen = (len / 4) * 3 - pads;
     unsigned char* out = (unsigned char*)malloc(olen + 1);
-    if(out == NULL){free(clean); return NULL;}
+    if(!out) return NULL;
 
-    size_t j = 0;
-    for(size_t i = 0; i < cl; i += 4)
+    const unsigned char* s = (const unsigned char*)src;
+    unsigned char* o = out;
+    const unsigned char* end = s + len - (pads ? 4 : 0);
+    while(s < end)
     {
-        const int a = dec[(unsigned char)clean[i]];
-        const int b = dec[(unsigned char)clean[i+1]];
-        const int c = dec[(unsigned char)clean[i+2]];
-        const int d = dec[(unsigned char)clean[i+3]];
-        if(a < 0 || b < 0 || c < 0 || d < 0)
-        {
-            free(clean);
-            free(out);
-            return NULL;
-        }
-        const unsigned int n = ((unsigned int)a << 18) |
-                               ((unsigned int)b << 12) |
-                               ((unsigned int)c << 6) |
-                               (unsigned int)d;
-        if(j < olen){out[j++] = (unsigned char)((n >> 16) & 255);}
-        if(j < olen){out[j++] = (unsigned char)((n >> 8) & 255);}
-        if(j < olen){out[j++] = (unsigned char)(n & 255);}
+        const unsigned int a = b64_dtable[s[0]];
+        const unsigned int b = b64_dtable[s[1]];
+        const unsigned int c = b64_dtable[s[2]];
+        const unsigned int d = b64_dtable[s[3]];
+        if((a | b | c | d) == 255){ free(out); return NULL; }
+        const unsigned int t = (a << 18) | (b << 12) | (c << 6) | d;
+        o[0] = (unsigned char)(t >> 16);
+        o[1] = (unsigned char)(t >> 8);
+        o[2] = (unsigned char)t;
+        s += 4;
+        o += 3;
     }
-    free(clean);
-    if(out_len){*out_len = olen;}
+    if(pads)
+    {
+        const unsigned int a = b64_dtable[s[0]];
+        const unsigned int b = b64_dtable[s[1]];
+        const unsigned int c = (s[2] == '=') ? 0 : b64_dtable[s[2]];
+        const unsigned int d = (s[3] == '=') ? 0 : b64_dtable[s[3]];
+        if((a | b | c | d) == 255){ free(out); return NULL; }
+        const unsigned int t = (a << 18) | (b << 12) | (c << 6) | d;
+        *o++ = (unsigned char)(t >> 16);
+        if(pads < 2) *o++ = (unsigned char)(t >> 8);
+    }
+    if(out_len) *out_len = olen;
     return out;
 }
 
@@ -241,7 +252,7 @@ uint saveBase64(const char* path)
     char tmp[16];
     timestamp(tmp);
     printf("[%s] Exported Base64: %s (%u voxels)\n", tmp, file, placedVoxels());
-    snprintf(warnm, sizeof(warnm), "Exported Base64.");
+    snprintf(warnm, sizeof(warnm), "Exported Base64");
     wti = t + 2.f;
     return 1;
 }
@@ -342,7 +353,7 @@ uint loadBase64(const char* path)
     char tmp[16];
     timestamp(tmp);
     printf("[%s] Imported Base64: %s (%u voxels)\n", tmp, file, placedVoxels());
-    snprintf(warnm, sizeof(warnm), "Imported Base64.");
+    snprintf(warnm, sizeof(warnm), "Imported Base64");
     wti = t + 2.f;
     return 1;
 }
