@@ -168,67 +168,120 @@ int PTIB2(const char x, const char y, const char z)
 //*************************************
 // ray functions
 //*************************************/
-int ray(vec* hit_pos, vec* hit_vec, const vec start_pos) // the look vector is a global
+int ray(vec* hit_pos, vec* hit_vec, const vec start_pos)
 {
-    // might need exclude conditions for obviously bogus rays to avoid those 2048 steps
     vec inc;
-    vMulS(&inc, look_dir, 0.015625f); // 0.0625f
-    int hit = -1;
+    vMulS(&inc, look_dir, 0.015625f);
+
     vec rp = start_pos;
-    for(uint i = 0; i < 8192; i++) // 2048
+    int been_inside = 0;
+
+    for(uint i = 0; i < 8192; i++)
     {
         vAdd(&rp, rp, inc);
-        if(isInBounds(rp) == 0){continue;} // break;
-        vec rb;
-        rb.x = roundf(rp.x);
-        rb.y = roundf(rp.y);
-        rb.z = roundf(rp.z);
-        const uint vi = PTI(rb.x, rb.y, rb.z);
-        //printf("ray: %u: %f %f %f\n", vi, rb.x, rb.y, rb.z);
+
+        if(isInBounds(rp) == 0)
+        {
+            if(been_inside) break;
+            continue;
+        }
+        been_inside = 1;
+
+        const vec rb = {roundf(rp.x), roundf(rp.y), roundf(rp.z)};
+        const int vi = (int)PTI(rb.x, rb.y, rb.z);
         if(g.voxels[vi] != 0)
         {
-            *hit_vec = (vec){rp.x-rb.x, rp.y-rb.y, rp.z-rb.z};
-            *hit_pos = (vec){rb.x, rb.y, rb.z};
-            hit = vi;
-            break;
+            *hit_vec = (vec){rp.x - rb.x, rp.y - rb.y, rp.z - rb.z};
+            *hit_pos = rb;
+            return vi;
         }
-        if(hit > -1){break;}
     }
-    return hit;
+    return -1;
 }
+
 void traceViewPath(const uint face)
 {
-    g.pb.w = -1.f; // pre-set as failed
-    vec rp;
-    lray = ray(&ghp, &rp, ipp);
-    if(lray > -1 && face == 1)
-    {
-       vNorm(&rp);
-       vec diff = rp;
-       rp = ghp;
+    g.pb.w = -1.f;
 
-       vec fd = diff;
-       fd.x = fabsf(diff.x);
-       fd.y = fabsf(diff.y);
-       fd.z = fabsf(diff.z);
-       if     (fd.x > fd.y && fd.x > fd.z){diff.y = 0.f, diff.z = 0.f;}
-       else if(fd.y > fd.x && fd.y > fd.z){diff.x = 0.f, diff.z = 0.f;}
-       else if(fd.z > fd.x && fd.z > fd.y){diff.x = 0.f, diff.y = 0.f;}
-       diff.x = roundf(diff.x);
-       diff.y = roundf(diff.y);
-       diff.z = roundf(diff.z);
+    vec off;
+    lray = ray(&ghp, &off, ipp);
+    if(lray < 0 || face != 1) return;
 
-       rp.x += diff.x;
-       rp.y += diff.y;
-       rp.z += diff.z;
+    const float ax = fabsf(off.x), ay = fabsf(off.y), az = fabsf(off.z);
 
-       if(vSumAbs(diff) == 1.f)
-       {
-            g.pb = rp;
-            g.pb.w = 1.f; // success
-       }
-    }
+    vec n = {0.f, 0.f, 0.f};
+    if(ax >= ay && ax >= az) n.x = (off.x >= 0.f) ? 1.f : -1.f;
+    else if(ay >= az)        n.y = (off.y >= 0.f) ? 1.f : -1.f;
+    else                     n.z = (off.z >= 0.f) ? 1.f : -1.f;
+
+    g.pb = ghp;
+    g.pb.x += n.x;
+    g.pb.y += n.y;
+    g.pb.z += n.z;
+    g.pb.w = 1.f;
 }
+
+// int ray(vec* hit_pos, vec* hit_vec, const vec start_pos) // the look vector is a global
+// {
+//     // might need exclude conditions for obviously bogus rays to avoid those 2048 steps
+//     vec inc;
+//     vMulS(&inc, look_dir, 0.015625f); // 0.0625f
+//     int hit = -1;
+//     vec rp = start_pos;
+//     for(uint i = 0; i < 8192; i++) // 2048
+//     {
+//         vAdd(&rp, rp, inc);
+//         if(isInBounds(rp) == 0){continue;} // break;
+//         vec rb;
+//         rb.x = roundf(rp.x);
+//         rb.y = roundf(rp.y);
+//         rb.z = roundf(rp.z);
+//         const uint vi = PTI(rb.x, rb.y, rb.z);
+//         //printf("ray: %u: %f %f %f\n", vi, rb.x, rb.y, rb.z);
+//         if(g.voxels[vi] != 0)
+//         {
+//             *hit_vec = (vec){rp.x-rb.x, rp.y-rb.y, rp.z-rb.z};
+//             *hit_pos = (vec){rb.x, rb.y, rb.z};
+//             hit = vi;
+//             break;
+//         }
+//         if(hit > -1){break;}
+//     }
+//     return hit;
+// }
+// void traceViewPath(const uint face)
+// {
+//     g.pb.w = -1.f; // pre-set as failed
+//     vec rp;
+//     lray = ray(&ghp, &rp, ipp);
+//     if(lray > -1 && face == 1)
+//     {
+//        vNorm(&rp);
+//        vec diff = rp;
+//        rp = ghp;
+
+//        vec fd = diff;
+//        fd.x = fabsf(diff.x);
+//        fd.y = fabsf(diff.y);
+//        fd.z = fabsf(diff.z);
+//        if     (fd.x > fd.y && fd.x > fd.z){diff.y = 0.f, diff.z = 0.f;}
+//        else if(fd.y > fd.x && fd.y > fd.z){diff.x = 0.f, diff.z = 0.f;}
+//        else if(fd.z > fd.x && fd.z > fd.y){diff.x = 0.f, diff.y = 0.f;}
+//        diff.x = roundf(diff.x);
+//        diff.y = roundf(diff.y);
+//        diff.z = roundf(diff.z);
+
+//        rp.x += diff.x;
+//        rp.y += diff.y;
+//        rp.z += diff.z;
+
+//        if(vSumAbs(diff) == 1.f)
+//        {
+//             g.pb = rp;
+//             g.pb.w = 1.f; // success
+//        }
+//     }
+// }
 
 // int ray(vec* hit_pos, vec pos) // look vector is still a global, not going to mess with that for now
 // {
