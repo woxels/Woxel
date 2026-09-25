@@ -1792,7 +1792,7 @@ int main(int argc, char** argv)
     printf("\n* Arrow Keys can be used to move the view around.\n");
     printf("* Your state is automatically saved on exit.\n");
     printf("\nConsole Arguments:\n");
-    printf("./wox <project_name> <mouse_sensitivity> <color_palette_file_path>\n");
+    printf("./wox <project_name> <[OPTIONAL]mouse_sensitivity> <[OPTIONAL]color_palette_file_path>\n");
     printf("e.g; ./wox Untitled 0.003 /tmp/colors.txt\n");
     printf("1st, \"Untitled\", Name of project to open or create.\n");
     printf("2nd, \"0.003\", Mouse sensitivity.\n");
@@ -1803,7 +1803,7 @@ int main(int argc, char** argv)
     printf("To load Base64: ./wox loadb64 <file_path>\n");
     printf("e.g; ./wox loadb64 /home/user/file.b64\n");
     printf("Loaded files are adopted as a project (basename) so F3 / exit can save them.\n\n");
-    printf("To export: ./wox export <project_or_file> [format] <export_path>\n");
+    printf("To export: ./wox export <project_or_file> <[OPTIONAL]format: wox,txt,vv,ply,b64> <export_path>\n");
     printf("e.g; ./wox export Untitled ply ./file.ply\n");
     printf("e.g; ./wox export ./file.b64 ./file.ply\n");
     printf("e.g; ./wox export /home/user/file.b64 ply /home/user/file.ply\n");
