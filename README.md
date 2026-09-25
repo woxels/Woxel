@@ -60,18 +60,21 @@ Woxel uses intuitive controls akin to Minetest and Minecraft, while providing a 
 ### 📂 Load Base64 from file
 * `./wox loadb64 <file_path>`
 * *e.g;* `./wox loadb64 /home/user/file.b64`
+* The file is adopted as a project named after the basename (so `file.b64` becomes project `file`). F3 / exit then save `file.wox.gz` in the Woxel project folder.
 
 ### 📂 Load `*.wox.gz` from file
 * `./wox loadgz <file_path>`
 * *e.g;* `./wox loadgz /home/user/file.wox.gz`
+* Same adoption: you can save and export it as a normal project afterwards.
 
 ### 📂 Export as mesh or voxels
-* `./wox export <project_name> <option: wox,txt,vv,ply,b64> <export_path>`
-* *e.g;* `./wox export untitled txt /home/user/file.txt`
+* `./wox export <project_or_file> <option: wox,txt,vv,ply,b64> <export_path>`
 * *e.g;* `./wox export untitled ply /home/user/file.ply`
+* *e.g;* `./wox export /home/user/file.b64 ply /home/user/file.ply`
+* *e.g;* `./wox export /home/user/file.wox.gz txt /home/user/file.txt`
+* Source can be a saved project name, a `.b64` file, or a `.wox.gz` file. You do not need to save a project first.
 
-🤔 *When exporting as `ply` you will want to merge vertices by distance in [Blender](https://www.blender.org/)
-or `Cleaning and Repairing > Merge Close Vertices` in [MeshLab](https://www.meshlab.net/).* 👍
+PLY export uses greedy meshing: coplanar same-color faces become quads.
 
 ## Compile
 Run `make` or `make test` or `cc main.c -Ofast -lm -lz -lSDL2 -lGLESv2 -lEGL -o wox`

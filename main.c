@@ -1578,6 +1578,54 @@ void drawHud(const uint type)
 }
 
 //*************************************
+// CLI source helpers (project name vs file path)
+//*************************************
+static int wox_has_ext(const char* path, const char* ext)
+{
+    const size_t n = strlen(path);
+    const size_t e = strlen(ext);
+    if(n < e){return 0;}
+    const char* a = path + (n - e);
+    for(size_t i = 0; i < e; i++)
+    {
+        const unsigned char ca = (unsigned char)a[i];
+        const unsigned char cb = (unsigned char)ext[i];
+        const char la = (ca >= 'A' && ca <= 'Z') ? (char)(ca + 32) : (char)ca;
+        const char lb = (cb >= 'A' && cb <= 'Z') ? (char)(cb + 32) : (char)cb;
+        if(la != lb){return 0;}
+    }
+    return 1;
+}
+
+// 0 = saved project name, 1 = .wox.gz / .gz file, 2 = .b64 file
+static int wox_source_kind(const char* s)
+{
+    if(s == NULL || s[0] == 0){return 0;}
+    if(wox_has_ext(s, ".b64")){return 2;}
+    if(wox_has_ext(s, ".gz") || wox_has_ext(s, ".wox")){return 1;}
+    if(b64_is_filepath(s)){return 1;}
+    return 0;
+}
+
+static void wox_title_from_path(char* out, size_t outsz, const char* path)
+{
+    const char* base = path;
+    for(const char* p = path; *p; p++)
+        if(*p == '/' || *p == '\\'){base = p + 1;}
+    snprintf(out, outsz, "%s", (base[0] != 0) ? base : "Untitled");
+    char* dot = strrchr(out, '.');
+    if(dot != NULL && wox_has_ext(dot, ".gz"))
+    {
+        *dot = 0;
+        char* dot2 = strrchr(out, '.');
+        if(dot2 != NULL && wox_has_ext(dot2, ".wox")){*dot2 = 0;}
+    }
+    else if(dot != NULL && (wox_has_ext(dot, ".b64") || wox_has_ext(dot, ".wox")))
+        *dot = 0;
+    if(out[0] == 0){snprintf(out, outsz, "Untitled");}
+}
+
+//*************************************
 // Process Entry Point
 //*************************************
 int main(int argc, char** argv)
@@ -1623,11 +1671,13 @@ int main(int argc, char** argv)
     printf("To load from file: ./wox loadgz <file_path>\n");
     printf("e.g; ./wox loadgz /home/user/file.wox.gz\n\n");
     printf("To load Base64: ./wox loadb64 <file_path>\n");
-    printf("e.g; ./wox loadb64 /home/user/file.b64\n\n");
-    printf("To export: ./wox export <project_name> <option: wox,txt,vv,ply,b64> <export_path>\n");
-    printf("e.g; ./wox export Untitled txt ./file.txt\n");
-    printf("e.g; ./wox export Untitled b64 ./file.b64\n");
-    printf("Base64 export path is relative to the current directory.\n");
+    printf("e.g; ./wox loadb64 /home/user/file.b64\n");
+    printf("Loaded files are adopted as a project (basename) so F3 / exit can save them.\n\n");
+    printf("To export: ./wox export <project_or_file> <option: wox,txt,vv,ply,b64> <export_path>\n");
+    printf("e.g; ./wox export Untitled ply ./file.ply\n");
+    printf("e.g; ./wox export /home/user/file.b64 ply ./file.ply\n");
+    printf("e.g; ./wox export /home/user/file.wox.gz txt ./file.txt\n");
+    printf("Source can be a saved project name, a .b64 file, or a .wox.gz file.\n");
     printf("PLY export uses greedy meshing: coplanar same-color faces become quads.\n\n");
     printf("Find more color palettes at; https://lospec.com/palette-list\n");
     printf("You can use any palette upto 32 colors. But don't use #000000 (Black)\nin your color palette as it will terminate at that color.\n\n");
@@ -1644,34 +1694,63 @@ int main(int argc, char** argv)
 
     // argv
     char export_path[1024] = {0};
+    char source_path[1024] = {0};
     uint export_type = 0;
     uint load_b64 = 0;
+    uint adopt_title = 0;
     if(argc >= 2 && strlen(argv[1]) < 256)
     {
         sprintf(openTitle, "%s", argv[1]);
     }
-    if(argc >= 3 && strcmp(argv[1], "loadgz") == 0 && strlen(argv[2]) < 256)
+    if(argc >= 3 && strcmp(argv[1], "loadgz") == 0 && strlen(argv[2]) < 1024)
     {
-        sprintf(openTitle, "%s", argv[2]);
+        snprintf(source_path, sizeof(source_path), "%s", argv[2]);
         load_state = 1;
+        adopt_title = 1;
     }
-    if(argc >= 3 && strcmp(argv[1], "loadb64") == 0 && strlen(argv[2]) < 256)
+    if(argc >= 3 && strcmp(argv[1], "loadb64") == 0 && strlen(argv[2]) < 1024)
     {
-        sprintf(openTitle, "%s", argv[2]);
+        snprintf(source_path, sizeof(source_path), "%s", argv[2]);
         load_b64 = 1;
+        adopt_title = 1;
     }
-    if(argc >= 5 && strcmp(argv[1], "export") == 0 && strlen(argv[2]) < 256 && strlen(argv[4]) < 1024)
+    if(argc >= 5 && strcmp(argv[1], "export") == 0 && strlen(argv[2]) < 1024 && strlen(argv[4]) < 1024)
     {
-        sprintf(openTitle, "%s", argv[2]);
+        snprintf(source_path, sizeof(source_path), "%s", argv[2]);
+        const int kind = wox_source_kind(source_path);
+        if(kind == 2){load_b64 = 1; load_state = 0;}
+        else if(kind == 1){load_b64 = 0; load_state = 1;}
+        else
+        {
+            load_b64 = 0;
+            load_state = 0;
+            snprintf(openTitle, sizeof(openTitle), "%s", source_path);
+            source_path[0] = 0;
+        }
         if     (strcmp(argv[3], "txt") == 0){export_type=1;}
         else if(strcmp(argv[3], "vv" ) == 0){export_type=2;}
         else if(strcmp(argv[3], "ply") == 0){export_type=3;}
         else if(strcmp(argv[3], "b64") == 0){export_type=4;}
-        sprintf(export_path, "%s", argv[4]);
+        snprintf(export_path, sizeof(export_path), "%s", argv[4]);
     }
 
     // default state
-    if(load_b64 ? (loadBase64(openTitle) == 0) : (loadState(openTitle, load_state) == 0))
+    const char* load_name = (source_path[0] != 0) ? source_path : openTitle;
+    const uint loaded_ok = load_b64 ? loadBase64(load_name) : loadState(load_name, load_state);
+    if(loaded_ok && adopt_title)
+    {
+        wox_title_from_path(openTitle, sizeof(openTitle), source_path);
+        load_state = 0; // F3 / exit save into the normal project folder
+        char tmpad[16];
+        timestamp(tmpad);
+        printf("[%s] Project name: %s (save path %s%s.wox.gz)\n", tmpad, openTitle, appdir ? appdir : "", openTitle);
+    }
+    if(loaded_ok == 0 && export_path[0] != 0)
+    {
+        printf("ERROR: could not load '%s' for export.\n", load_name);
+        return 1;
+    }
+    if(loaded_ok == 0)
     {
         defaultState(0);
         memset(&g.voxels, 0, max_voxels);
@@ -1842,6 +1921,7 @@ int main(int argc, char** argv)
                 fprintf(f, "ply\n");
                 fprintf(f, "format ascii 1.0\n");
                 fprintf(f, "comment Created by %s %s - woxels.github.io\n", appTitle, appVersion);
+                fprintf(f, "comment greedy-meshed quads, same-color faces merged\n");
                 fprintf(f, "element vertex %u\n", vc);
                 fprintf(f, "property float x\n");
                 fprintf(f, "property float y\n");
