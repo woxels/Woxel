@@ -298,9 +298,21 @@ uint loadBase64(const char* path)
     fclose(f);
     raw[nread] = 0;
 
-    size_t zlen = 0;
-    unsigned char* zbuf = b64_decode(raw, nread, &zlen);
+    size_t slen = 0;
+    char* stripped = (char*)malloc(nread + 1);
+    if(stripped == NULL){free(raw); return 0;}
+    for(size_t i = 0; i < nread; i++)
+    {
+        const unsigned char c = (unsigned char)raw[i];
+        if(c == ' ' || c == '\n' || c == '\r' || c == '\t'){continue;}
+        stripped[slen++] = (char)c;
+    }
+    stripped[slen] = 0;
     free(raw);
+
+    size_t zlen = 0;
+    unsigned char* zbuf = b64_decode(stripped, slen, &zlen);
+    free(stripped);
     if(zbuf == NULL || zlen == 0)
     {
         printf("ERROR: loadBase64() invalid Base64 data.\n");
@@ -1597,14 +1609,67 @@ static int wox_has_ext(const char* path, const char* ext)
     return 1;
 }
 
-// 0 = saved project name, 1 = .wox.gz / .gz file, 2 = .b64 file
-static int wox_source_kind(const char* s)
+static int wox_ieq(const char* a, const char* b)
 {
-    if(s == NULL || s[0] == 0){return 0;}
-    if(wox_has_ext(s, ".b64")){return 2;}
-    if(wox_has_ext(s, ".gz") || wox_has_ext(s, ".wox")){return 1;}
-    if(b64_is_filepath(s)){return 1;}
-    return 0;
+    if(a == NULL || b == NULL){return 0;}
+    while(*a && *b)
+    {
+        unsigned char ca = (unsigned char)*a++, cb = (unsigned char)*b++;
+        if(ca >= 'A' && ca <= 'Z'){ca = (unsigned char)(ca + 32);}
+        if(cb >= 'A' && cb <= 'Z'){cb = (unsigned char)(cb + 32);}
+        if(ca != cb){return 0;}
+    }
+    return *a == 0 && *b == 0;
+}
+
+static void wox_expand_path(char* out, size_t outsz, const char* path)
+{
+    if(path == NULL){out[0] = 0; return;}
+    if(path[0] == '~' && (path[1] == '/' || path[1] == '\\' || path[1] == 0))
+    {
+        const char* home = getenv("HOME");
+        if(home != NULL && home[0] != 0)
+        {
+            snprintf(out, outsz, "%s%s", home, path + 1);
+            return;
+        }
+    }
+    snprintf(out, outsz, "%s", path);
+}
+
+static int wox_file_exists(const char* path)
+{
+    FILE* f = fopen(path, "rb");
+    if(f == NULL){return 0;}
+    fclose(f);
+    return 1;
+}
+
+static int wox_file_is_gzip(const char* path)
+{
+    FILE* f = fopen(path, "rb");
+    if(f == NULL){return 0;}
+    unsigned char m[2] = {0, 0};
+    const size_t n = fread(m, 1, 2, f);
+    fclose(f);
+    return n == 2 && m[0] == 0x1f && m[1] == 0x8b;
+}
+
+static int wox_parse_format(const char* s)
+{
+    if(s == NULL || s[0] == 0){return -1;}
+    if(s[0] == '.'){s++;}
+    if(wox_ieq(s, "wox") || wox_ieq(s, "gz") || wox_ieq(s, "wox.gz")){return 0;}
+    if(wox_ieq(s, "txt")){return 1;}
+    if(wox_ieq(s, "vv")){return 2;}
+    if(wox_ieq(s, "ply")){return 3;}
+    if(wox_ieq(s, "b64") || wox_ieq(s, "base64")){return 4;}
+    if(wox_has_ext(s, ".wox") || wox_has_ext(s, ".gz")){return 0;}
+    if(wox_has_ext(s, ".txt")){return 1;}
+    if(wox_has_ext(s, ".vv")){return 2;}
+    if(wox_has_ext(s, ".ply")){return 3;}
+    if(wox_has_ext(s, ".b64")){return 4;}
+    return -1;
 }
 
 static void wox_title_from_path(char* out, size_t outsz, const char* path)
@@ -1623,6 +1688,71 @@ static void wox_title_from_path(char* out, size_t outsz, const char* path)
     else if(dot != NULL && (wox_has_ext(dot, ".b64") || wox_has_ext(dot, ".wox")))
         *dot = 0;
     if(out[0] == 0){snprintf(out, outsz, "Untitled");}
+}
+
+// Try an existing file as gzip project first, then Base64.
+static uint wox_load_file(const char* path)
+{
+    if(wox_file_is_gzip(path))
+    {
+        if(loadState(path, 1)){return 1;}
+    }
+    if(loadBase64(path)){return 2;}
+    if(loadState(path, 1)){return 1;}
+    return 0;
+}
+
+// Resolve project name or file path into resolved_src. Returns 0 on failure.
+static uint wox_load_any(const char* src, char* resolved, size_t resolved_sz)
+{
+    char path[1024], alt[1024];
+    wox_expand_path(path, sizeof(path), src);
+
+    if(wox_file_exists(path))
+    {
+        snprintf(resolved, resolved_sz, "%s", path);
+        return wox_load_file(path);
+    }
+
+    snprintf(alt, sizeof(alt), "%s.b64", path);
+    if(wox_file_exists(alt))
+    {
+        snprintf(resolved, resolved_sz, "%s", alt);
+        return wox_load_file(alt);
+    }
+
+    snprintf(alt, sizeof(alt), "%s.wox.gz", path);
+    if(wox_file_exists(alt))
+    {
+        snprintf(resolved, resolved_sz, "%s", alt);
+        return wox_load_file(alt);
+    }
+
+    if(appdir != NULL)
+    {
+        snprintf(alt, sizeof(alt), "%s%s.wox.gz", appdir, path);
+        if(wox_file_exists(alt))
+        {
+            snprintf(resolved, resolved_sz, "%s", alt);
+            if(loadState(alt, 1)){return 1;}
+        }
+        snprintf(alt, sizeof(alt), "%s%s.b64", appdir, path);
+        if(wox_file_exists(alt))
+        {
+            snprintf(resolved, resolved_sz, "%s", alt);
+            return wox_load_file(alt);
+        }
+        snprintf(alt, sizeof(alt), "%s%s", appdir, path);
+        if(wox_file_exists(alt))
+        {
+            snprintf(resolved, resolved_sz, "%s", alt);
+            return wox_load_file(alt);
+        }
+    }
+
+    snprintf(resolved, resolved_sz, "%s", path);
+    if(loadState(path, 0)){return 1;}
+    return 0;
 }
 
 //*************************************
@@ -1673,11 +1803,12 @@ int main(int argc, char** argv)
     printf("To load Base64: ./wox loadb64 <file_path>\n");
     printf("e.g; ./wox loadb64 /home/user/file.b64\n");
     printf("Loaded files are adopted as a project (basename) so F3 / exit can save them.\n\n");
-    printf("To export: ./wox export <project_or_file> <option: wox,txt,vv,ply,b64> <export_path>\n");
+    printf("To export: ./wox export <project_or_file> [format] <export_path>\n");
     printf("e.g; ./wox export Untitled ply ./file.ply\n");
-    printf("e.g; ./wox export /home/user/file.b64 ply ./file.ply\n");
-    printf("e.g; ./wox export /home/user/file.wox.gz txt ./file.txt\n");
-    printf("Source can be a saved project name, a .b64 file, or a .wox.gz file.\n");
+    printf("e.g; ./wox export ./file.b64 ./file.ply\n");
+    printf("e.g; ./wox export /home/user/file.b64 ply /home/user/file.ply\n");
+    printf("e.g; ./wox export ~/file.wox.gz txt ./file.txt\n");
+    printf("Format is optional if the output path ends in .ply/.txt/.vv/.b64/.wox.gz\n");
     printf("PLY export uses greedy meshing: coplanar same-color faces become quads.\n\n");
     printf("Find more color palettes at; https://lospec.com/palette-list\n");
     printf("You can use any palette upto 32 colors. But don't use #000000 (Black)\nin your color palette as it will terminate at that color.\n\n");
@@ -1695,59 +1826,80 @@ int main(int argc, char** argv)
     // argv
     char export_path[1024] = {0};
     char source_path[1024] = {0};
+    char resolved_src[1024] = {0};
     uint export_type = 0;
-    uint load_b64 = 0;
     uint adopt_title = 0;
+    uint loaded_ok = 0;
     if(argc >= 2 && strlen(argv[1]) < 256)
     {
         sprintf(openTitle, "%s", argv[1]);
     }
     if(argc >= 3 && strcmp(argv[1], "loadgz") == 0 && strlen(argv[2]) < 1024)
     {
-        snprintf(source_path, sizeof(source_path), "%s", argv[2]);
-        load_state = 1;
+        wox_expand_path(source_path, sizeof(source_path), argv[2]);
         adopt_title = 1;
     }
     if(argc >= 3 && strcmp(argv[1], "loadb64") == 0 && strlen(argv[2]) < 1024)
     {
-        snprintf(source_path, sizeof(source_path), "%s", argv[2]);
-        load_b64 = 1;
+        wox_expand_path(source_path, sizeof(source_path), argv[2]);
         adopt_title = 1;
     }
-    if(argc >= 5 && strcmp(argv[1], "export") == 0 && strlen(argv[2]) < 1024 && strlen(argv[4]) < 1024)
+    if(argc >= 2 && strcmp(argv[1], "export") == 0)
     {
-        snprintf(source_path, sizeof(source_path), "%s", argv[2]);
-        const int kind = wox_source_kind(source_path);
-        if(kind == 2){load_b64 = 1; load_state = 0;}
-        else if(kind == 1){load_b64 = 0; load_state = 1;}
+        if(argc < 4)
+        {
+            printf("ERROR: usage: ./wox export <project_or_file> [wox|txt|vv|ply|b64] <export_path>\n");
+            printf("       ./wox export ./scene.b64 ./scene.ply\n");
+            return 1;
+        }
+        wox_expand_path(source_path, sizeof(source_path), argv[2]);
+        if(argc >= 5)
+        {
+            int fmt = wox_parse_format(argv[3]);
+            wox_expand_path(export_path, sizeof(export_path), argv[4]);
+            if(fmt < 0){fmt = wox_parse_format(argv[4]);}
+            if(fmt < 0)
+            {
+                printf("ERROR: unknown export format '%s' (use wox, txt, vv, ply, or b64)\n", argv[3]);
+                return 1;
+            }
+            export_type = (uint)fmt;
+        }
         else
         {
-            load_b64 = 0;
-            load_state = 0;
-            snprintf(openTitle, sizeof(openTitle), "%s", source_path);
-            source_path[0] = 0;
+            wox_expand_path(export_path, sizeof(export_path), argv[3]);
+            const int fmt = wox_parse_format(argv[3]);
+            if(fmt < 0)
+            {
+                printf("ERROR: cannot infer format from '%s' — pass ply/txt/vv/b64/wox\n", argv[3]);
+                return 1;
+            }
+            export_type = (uint)fmt;
         }
-        if     (strcmp(argv[3], "txt") == 0){export_type=1;}
-        else if(strcmp(argv[3], "vv" ) == 0){export_type=2;}
-        else if(strcmp(argv[3], "ply") == 0){export_type=3;}
-        else if(strcmp(argv[3], "b64") == 0){export_type=4;}
-        snprintf(export_path, sizeof(export_path), "%s", argv[4]);
     }
 
-    // default state
-    const char* load_name = (source_path[0] != 0) ? source_path : openTitle;
-    const uint loaded_ok = load_b64 ? loadBase64(load_name) : loadState(load_name, load_state);
-    if(loaded_ok && adopt_title)
+    // load source (file, sniffed type, or saved project name)
+    if(source_path[0] != 0)
     {
-        wox_title_from_path(openTitle, sizeof(openTitle), source_path);
-        load_state = 0; // F3 / exit save into the normal project folder
-        char tmpad[16];
-        timestamp(tmpad);
-        printf("[%s] Project name: %s (save path %s%s.wox.gz)\n", tmpad, openTitle, appdir ? appdir : "", openTitle);
+        loaded_ok = wox_load_any(source_path, resolved_src, sizeof(resolved_src));
+        if(loaded_ok && adopt_title)
+        {
+            wox_title_from_path(openTitle, sizeof(openTitle), resolved_src[0] ? resolved_src : source_path);
+            load_state = 0;
+            char tmpad[16];
+            timestamp(tmpad);
+            printf("[%s] Project name: %s (save path %s%s.wox.gz)\n", tmpad, openTitle, appdir ? appdir : "", openTitle);
+        }
+    }
+    else
+    {
+        loaded_ok = loadState(openTitle, load_state);
+        snprintf(resolved_src, sizeof(resolved_src), "%s", openTitle);
     }
     if(loaded_ok == 0 && export_path[0] != 0)
     {
-        printf("ERROR: could not load '%s' for export.\n", load_name);
+        printf("ERROR: could not load '%s' for export.\n", source_path[0] ? source_path : openTitle);
+        printf("Tried the path as a file (.b64 / .wox.gz) and as a project name.\n");
         return 1;
     }
     if(loaded_ok == 0)
