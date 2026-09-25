@@ -11,6 +11,7 @@
 #pragma GCC diagnostic ignored "-Wtrigraphs"
 
 #include <time.h>
+#include <string.h>
 #include <zlib.h>
 
 #include <SDL2/SDL.h>
@@ -666,74 +667,218 @@ uint loadState(const char* name, const uint fs)
     return 0;
 }
 
-// voxel face rendering for ply
-void fw_mx(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
+//*************************************
+// greedy PLY mesher (quads, same-color merge)
+//*************************************
+static int ply_is_air(const int x, const int y, const int z)
 {
-    x -= 64.f, y -= 64.f;
-    const float s = 0.5f;
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y-s, z+s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y+s, z-s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y-s, z-s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y-s, z+s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y+s, z+s, r, g, b);
-    fprintf(f, "%g %g %g -1 0 0 %u %u %u\n", x-s, y+s, z-s, r, g, b);
+    if(x < 0 || y < 0 || z < 0 || x > 127 || y > 127 || z > 127){return 1;}
+    return g.voxels[PTI((uchar)x, (uchar)y, (uchar)z)] == 0;
 }
-void fw_px(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
+
+static int ply_export_id(const int x, const int y, const int z)
 {
-    x -= 64.f, y -= 64.f;
-    const float s = 0.5f;
-    fprintf(f, "%g %g %g 1 0 0 %u %u %u\n", x+s, y+s, z+s, r, g, b);
-    fprintf(f, "%g %g %g 1 0 0 %u %u %u\n", x+s, y-s, z-s, r, g, b);
-    fprintf(f, "%g %g %g 1 0 0 %u %u %u\n", x+s, y+s, z-s, r, g, b);
-    fprintf(f, "%g %g %g 1 0 0 %u %u %u\n", x+s, y+s, z+s, r, g, b);
-    fprintf(f, "%g %g %g 1 0 0 %u %u %u\n", x+s, y-s, z+s, r, g, b);
-    fprintf(f, "%g %g %g 1 0 0 %u %u %u\n", x+s, y-s, z-s, r, g, b);
+    if(x < 0 || y < 0 || z < 0 || x > 127 || y > 127 || z > 127){return 0;}
+    const uchar id = g.voxels[PTI((uchar)x, (uchar)y, (uchar)z)];
+    if(id < 8){return 0;}
+    const uint tu = g.colors[id-1];
+    if((tu & 0x00FFFFFF) == 0){return 0;}
+    return (int)id;
 }
-//
-void fw_my(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
+
+static void ply_vert(FILE* f, float x, float y, float z,
+                    const float nx, const float ny, const float nz,
+                    const uchar r, const uchar gc, const uchar b)
 {
-    x -= 64.f, y -= 64.f;
-    const float s = 0.5f;
-    fprintf(f, "%g %g %g 0 -1 0 %u %u %u\n", x+s, y-s, z+s, r, g, b);
-    fprintf(f, "%g %g %g 0 -1 0 %u %u %u\n", x-s, y-s, z-s, r, g, b);
-    fprintf(f, "%g %g %g 0 -1 0 %u %u %u\n", x+s, y-s, z-s, r, g, b);
-    fprintf(f, "%g %g %g 0 -1 0 %u %u %u\n", x+s, y-s, z+s, r, g, b);
-    fprintf(f, "%g %g %g 0 -1 0 %u %u %u\n", x-s, y-s, z+s, r, g, b);
-    fprintf(f, "%g %g %g 0 -1 0 %u %u %u\n", x-s, y-s, z-s, r, g, b);
+    x -= 64.f;
+    y -= 64.f;
+    fprintf(f, "%g %g %g %g %g %g %u %u %u\n", x, y, z, nx, ny, nz, r, gc, b);
 }
-void fw_py(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
+
+static void ply_rgb(const int id, uchar* r, uchar* gc, uchar* b)
 {
-    x -= 64.f, y -= 64.f;
-    const float s = 0.5f;
-    fprintf(f, "%g %g %g 0 1 0 %u %u %u\n", x-s, y+s, z+s, r, g, b);
-    fprintf(f, "%g %g %g 0 1 0 %u %u %u\n", x+s, y+s, z-s, r, g, b);
-    fprintf(f, "%g %g %g 0 1 0 %u %u %u\n", x-s, y+s, z-s, r, g, b);
-    fprintf(f, "%g %g %g 0 1 0 %u %u %u\n", x-s, y+s, z+s, r, g, b);
-    fprintf(f, "%g %g %g 0 1 0 %u %u %u\n", x+s, y+s, z+s, r, g, b);
-    fprintf(f, "%g %g %g 0 1 0 %u %u %u\n", x+s, y+s, z-s, r, g, b);
+    const uint tu = g.colors[id-1];
+    *r  = (uchar)((tu & 0x00FF0000) >> 16);
+    *gc = (uchar)((tu & 0x0000FF00) >> 8);
+    *b  = (uchar)(tu & 0x000000FF);
 }
-//
-void fw_mz(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
+
+// Merge runs of identical mask values into axis-aligned rectangles.
+// mask is 128x128, row-major. Returns number of quads. If f != NULL, emits 4 verts each.
+static uint ply_greedy_slice(FILE* f, int* mask, const int dim_u, const int dim_v,
+                             void (*emit)(FILE*, int, int, int, int, int, uchar, uchar, uchar),
+                             const int slice)
 {
-    x -= 64.f, y -= 64.f;
-    const float s = 0.5f;
-    fprintf(f, "%g %g %g 0 0 -1 %u %u %u\n", x+s, y+s, z-s, r, g, b);
-    fprintf(f, "%g %g %g 0 0 -1 %u %u %u\n", x-s, y-s, z-s, r, g, b);
-    fprintf(f, "%g %g %g 0 0 -1 %u %u %u\n", x-s, y+s, z-s, r, g, b);
-    fprintf(f, "%g %g %g 0 0 -1 %u %u %u\n", x+s, y+s, z-s, r, g, b);
-    fprintf(f, "%g %g %g 0 0 -1 %u %u %u\n", x+s, y-s, z-s, r, g, b);
-    fprintf(f, "%g %g %g 0 0 -1 %u %u %u\n", x-s, y-s, z-s, r, g, b);
+    uint quads = 0;
+    for(int v = 0; v < dim_v; v++)
+    {
+        for(int u = 0; u < dim_u; )
+        {
+            const int id = mask[v*128 + u];
+            if(id == 0){u++; continue;}
+
+            int w = 1;
+            while(u + w < dim_u && mask[v*128 + u + w] == id){w++;}
+
+            int h = 1;
+            int done = 0;
+            while(v + h < dim_v)
+            {
+                for(int k = 0; k < w; k++)
+                {
+                    if(mask[(v+h)*128 + u + k] != id){done = 1; break;}
+                }
+                if(done){break;}
+                h++;
+            }
+
+            uchar r, gc, b;
+            ply_rgb(id, &r, &gc, &b);
+            if(f != NULL && emit != NULL){emit(f, slice, u, v, w, h, r, gc, b);}
+            quads++;
+
+            for(int dv = 0; dv < h; dv++)
+                for(int du = 0; du < w; du++)
+                    mask[(v+dv)*128 + u + du] = 0;
+
+            u += w;
+        }
+    }
+    return quads;
 }
-void fw_pz(FILE* f, float x, float y, float z, uchar r, uchar g, uchar b)
+
+static void ply_emit_px(FILE* f, int x, int z, int y, int w, int h, uchar r, uchar gc, uchar b)
 {
-    x -= 64.f, y -= 64.f;
-    const float s = 0.5f;
-    fprintf(f, "%g %g %g 0 0 1 %u %u %u\n", x-s, y+s, z+s, r, g, b);
-    fprintf(f, "%g %g %g 0 0 1 %u %u %u\n", x+s, y-s, z+s, r, g, b);
-    fprintf(f, "%g %g %g 0 0 1 %u %u %u\n", x+s, y+s, z+s, r, g, b);
-    fprintf(f, "%g %g %g 0 0 1 %u %u %u\n", x-s, y+s, z+s, r, g, b);
-    fprintf(f, "%g %g %g 0 0 1 %u %u %u\n", x-s, y-s, z+s, r, g, b);
-    fprintf(f, "%g %g %g 0 0 1 %u %u %u\n", x+s, y-s, z+s, r, g, b);
+    const float p = (float)x + 0.5f;
+    const float y0 = (float)y - 0.5f, y1 = (float)(y + h) - 0.5f;
+    const float z0 = (float)z - 0.5f, z1 = (float)(z + w) - 0.5f;
+    ply_vert(f, p, y1, z1,  1,0,0, r,gc,b);
+    ply_vert(f, p, y0, z1,  1,0,0, r,gc,b);
+    ply_vert(f, p, y0, z0,  1,0,0, r,gc,b);
+    ply_vert(f, p, y1, z0,  1,0,0, r,gc,b);
+}
+static void ply_emit_mx(FILE* f, int x, int z, int y, int w, int h, uchar r, uchar gc, uchar b)
+{
+    const float p = (float)x - 0.5f;
+    const float y0 = (float)y - 0.5f, y1 = (float)(y + h) - 0.5f;
+    const float z0 = (float)z - 0.5f, z1 = (float)(z + w) - 0.5f;
+    ply_vert(f, p, y0, z1, -1,0,0, r,gc,b);
+    ply_vert(f, p, y1, z1, -1,0,0, r,gc,b);
+    ply_vert(f, p, y1, z0, -1,0,0, r,gc,b);
+    ply_vert(f, p, y0, z0, -1,0,0, r,gc,b);
+}
+static void ply_emit_py(FILE* f, int y, int z, int x, int w, int h, uchar r, uchar gc, uchar b)
+{
+    const float p = (float)y + 0.5f;
+    const float x0 = (float)x - 0.5f, x1 = (float)(x + h) - 0.5f;
+    const float z0 = (float)z - 0.5f, z1 = (float)(z + w) - 0.5f;
+    ply_vert(f, x0, p, z1,  0,1,0, r,gc,b);
+    ply_vert(f, x1, p, z1,  0,1,0, r,gc,b);
+    ply_vert(f, x1, p, z0,  0,1,0, r,gc,b);
+    ply_vert(f, x0, p, z0,  0,1,0, r,gc,b);
+}
+static void ply_emit_my(FILE* f, int y, int z, int x, int w, int h, uchar r, uchar gc, uchar b)
+{
+    const float p = (float)y - 0.5f;
+    const float x0 = (float)x - 0.5f, x1 = (float)(x + h) - 0.5f;
+    const float z0 = (float)z - 0.5f, z1 = (float)(z + w) - 0.5f;
+    ply_vert(f, x1, p, z1,  0,-1,0, r,gc,b);
+    ply_vert(f, x0, p, z1,  0,-1,0, r,gc,b);
+    ply_vert(f, x0, p, z0,  0,-1,0, r,gc,b);
+    ply_vert(f, x1, p, z0,  0,-1,0, r,gc,b);
+}
+static void ply_emit_pz(FILE* f, int z, int x, int y, int w, int h, uchar r, uchar gc, uchar b)
+{
+    const float p = (float)z + 0.5f;
+    const float y0 = (float)y - 0.5f, y1 = (float)(y + h) - 0.5f;
+    const float x0 = (float)x - 0.5f, x1 = (float)(x + w) - 0.5f;
+    ply_vert(f, x0, y1, p,  0,0,1, r,gc,b);
+    ply_vert(f, x0, y0, p,  0,0,1, r,gc,b);
+    ply_vert(f, x1, y0, p,  0,0,1, r,gc,b);
+    ply_vert(f, x1, y1, p,  0,0,1, r,gc,b);
+}
+static void ply_emit_mz(FILE* f, int z, int x, int y, int w, int h, uchar r, uchar gc, uchar b)
+{
+    const float p = (float)z - 0.5f;
+    const float y0 = (float)y - 0.5f, y1 = (float)(y + h) - 0.5f;
+    const float x0 = (float)x - 0.5f, x1 = (float)(x + w) - 0.5f;
+    ply_vert(f, x1, y1, p,  0,0,-1, r,gc,b);
+    ply_vert(f, x1, y0, p,  0,0,-1, r,gc,b);
+    ply_vert(f, x0, y0, p,  0,0,-1, r,gc,b);
+    ply_vert(f, x0, y1, p,  0,0,-1, r,gc,b);
+}
+
+// write_verts == 0: count quads only. write_verts == 1: emit vertices to f.
+uint ply_greedy_mesh(FILE* f, const int write_verts)
+{
+    int mask[128 * 128];
+    uint quads = 0;
+    FILE* out = write_verts ? f : NULL;
+
+    for(int x = 0; x < 128; x++)
+    {
+        memset(mask, 0, sizeof(mask));
+        for(int y = 0; y < 128; y++)
+            for(int z = 0; z < 128; z++)
+            {
+                const int id = ply_export_id(x, y, z);
+                if(id && ply_is_air(x+1, y, z)){mask[y*128 + z] = id;}
+            }
+        quads += ply_greedy_slice(out, mask, 128, 128, ply_emit_px, x);
+
+        memset(mask, 0, sizeof(mask));
+        for(int y = 0; y < 128; y++)
+            for(int z = 0; z < 128; z++)
+            {
+                const int id = ply_export_id(x, y, z);
+                if(id && ply_is_air(x-1, y, z)){mask[y*128 + z] = id;}
+            }
+        quads += ply_greedy_slice(out, mask, 128, 128, ply_emit_mx, x);
+    }
+
+    for(int y = 0; y < 128; y++)
+    {
+        memset(mask, 0, sizeof(mask));
+        for(int x = 0; x < 128; x++)
+            for(int z = 0; z < 128; z++)
+            {
+                const int id = ply_export_id(x, y, z);
+                if(id && ply_is_air(x, y+1, z)){mask[x*128 + z] = id;}
+            }
+        quads += ply_greedy_slice(out, mask, 128, 128, ply_emit_py, y);
+
+        memset(mask, 0, sizeof(mask));
+        for(int x = 0; x < 128; x++)
+            for(int z = 0; z < 128; z++)
+            {
+                const int id = ply_export_id(x, y, z);
+                if(id && ply_is_air(x, y-1, z)){mask[x*128 + z] = id;}
+            }
+        quads += ply_greedy_slice(out, mask, 128, 128, ply_emit_my, y);
+    }
+
+    for(int z = 0; z < 128; z++)
+    {
+        memset(mask, 0, sizeof(mask));
+        for(int y = 0; y < 128; y++)
+            for(int x = 0; x < 128; x++)
+            {
+                const int id = ply_export_id(x, y, z);
+                if(id && ply_is_air(x, y, z+1)){mask[y*128 + x] = id;}
+            }
+        quads += ply_greedy_slice(out, mask, 128, 128, ply_emit_pz, z);
+
+        memset(mask, 0, sizeof(mask));
+        for(int y = 0; y < 128; y++)
+            for(int x = 0; x < 128; x++)
+            {
+                const int id = ply_export_id(x, y, z);
+                if(id && ply_is_air(x, y, z-1)){mask[y*128 + x] = id;}
+            }
+        quads += ply_greedy_slice(out, mask, 128, 128, ply_emit_mz, z);
+    }
+
+    return quads;
 }
 
 //*************************************
