@@ -68,7 +68,7 @@ Woxel uses intuitive controls akin to Minetest and Minecraft, while providing a 
 * Same adoption: you can save and export it as a normal project afterwards.
 
 ### 📂 Export as mesh or voxels
-* `./wox export <project_or_file> [format] <export_path>`
+* `./wox export <project_or_file> <format: wox,txt,vv,ply,b64> <export_path>`
 * *e.g;* `./wox export untitled ply /home/user/file.ply`
 * *e.g;* `./wox export ./file.b64 ./file.ply`
 * *e.g;* `./wox export /home/user/file.b64 ply /home/user/file.ply`
