@@ -704,6 +704,7 @@ void main_loop()
                 else if(event.key.keysym.sym == SDLK_F8)
                 {
                     loadState(openTitle, 0);
+					has_changed = 1;
                 }
                 else if(event.key.keysym.sym == SDLK_F10)
                 {
