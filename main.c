@@ -1627,7 +1627,7 @@ int main(int argc, char** argv)
     printf("e.g; ./wox export Untitled txt ./file.txt\n");
     printf("e.g; ./wox export Untitled b64 ./file.b64\n");
     printf("Base64 export path is relative to the current directory.\n");
-    printf("When exporting as ply you will want to merge vertices by distance in Blender\nor `Cleaning and Repairing > Merge Close Vertices` in MeshLab.\n\n");
+    printf("PLY export uses greedy meshing: coplanar same-color faces become quads.\n\n");
     printf("Find more color palettes at; https://lospec.com/palette-list\n");
     printf("You can use any palette upto 32 colors. But don't use #000000 (Black)\nin your color palette as it will terminate at that color.\n\n");
     printf("Default 32 Color Palette: https://lospec.com/palette-list/resurrect-32\n");
@@ -1836,34 +1836,8 @@ int main(int argc, char** argv)
             FILE* f = fopen(export_path, "w");
             if(f != NULL)
             {
-                // I should be doing this in the single loop writing to memory so
-                // that I can append the header later for writing to file.
-                uint vc = 0;
-                for(uchar z = 0; z < 128; z++){
-                    for(uchar y = 0; y < 128; y++){
-                        for(uchar x = 0; x < 128; x++){
-                            const uint i = PTI(x,y,z);
-                            if(g.voxels[i] < 8){continue;}
-                            const uint tu = g.colors[g.voxels[i]-1];
-                            uchar cr = (tu & 0x00FF0000) >> 16;
-                            uchar cg = (tu & 0x0000FF00) >> 8;
-                            uchar cb = (tu & 0x000000FF);
-                            if(cr != 0 || cg != 0 || cb != 0)
-                            {
-                                int r = PTIB2(x-1, y, z);
-                                if(r < 0 || g.voxels[r] == 0){vc+=6;}
-                                r = PTIB2(x+1, y, z);
-                                if(r < 0 || g.voxels[r] == 0){vc+=6;}
-                                r = PTIB2(x, y-1, z);
-                                if(r < 0 || g.voxels[r] == 0){vc+=6;}
-                                r = PTIB2(x, y+1, z);
-                                if(r < 0 || g.voxels[r] == 0){vc+=6;}
-                                r = PTIB2(x, y, z-1);
-                                if(r < 0 || g.voxels[r] == 0){vc+=6;}
-                                r = PTIB2(x, y, z+1);
-                                if(r < 0 || g.voxels[r] == 0){vc+=6;}
-                }}}}
-                // but it's unlikely to ever be that expensive that anyone would notice this inefficiency
+                const uint faces = ply_greedy_mesh(NULL, 0);
+                const uint vc = faces * 4;
                 fprintf(f, "ply\n");
                 fprintf(f, "format ascii 1.0\n");
                 fprintf(f, "comment Created by %s %s - woxels.github.io\n", appTitle, appVersion);
@@ -1877,52 +1851,22 @@ int main(int argc, char** argv)
                 fprintf(f, "property uchar red\n");
                 fprintf(f, "property uchar green\n");
                 fprintf(f, "property uchar blue\n");
-                const uint faces = vc/3;
                 fprintf(f, "element face %u\n", faces);
                 fprintf(f, "property list uchar uint vertex_indices\n");
                 fprintf(f, "end_header\n");
-                for(uchar z = 0; z < 128; z++)
+                ply_greedy_mesh(f, 1);
+                for(uint i = 0, t = 0; i < faces; i++)
                 {
-                    for(uchar y = 0; y < 128; y++)
-                    {
-                        for(uchar x = 0; x < 128; x++)
-                        {
-                            const uint i = PTI(x,y,z);
-                            if(g.voxels[i] < 8){continue;}
-                            const uint tu = g.colors[g.voxels[i]-1];
-                            uchar cr = (tu & 0x00FF0000) >> 16;
-                            uchar cg = (tu & 0x0000FF00) >> 8;
-                            uchar cb = (tu & 0x000000FF);
-                            if(cr != 0 || cg != 0 || cb != 0)
-                            {
-                                int r = PTIB2(x-1, y, z);
-                                if(r < 0 || g.voxels[r] == 0){fw_mx(f, x, y, z, cr, cg, cb);}
-                                r = PTIB2(x+1, y, z);
-                                if(r < 0 || g.voxels[r] == 0){fw_px(f, x, y, z, cr, cg, cb);}
-                                r = PTIB2(x, y-1, z);
-                                if(r < 0 || g.voxels[r] == 0){fw_my(f, x, y, z, cr, cg, cb);}
-                                r = PTIB2(x, y+1, z);
-                                if(r < 0 || g.voxels[r] == 0){fw_py(f, x, y, z, cr, cg, cb);}
-                                r = PTIB2(x, y, z-1);
-                                if(r < 0 || g.voxels[r] == 0){fw_mz(f, x, y, z, cr, cg, cb);}
-                                r = PTIB2(x, y, z+1);
-                                if(r < 0 || g.voxels[r] == 0){fw_pz(f, x, y, z, cr, cg, cb);}
-                            }
-                        }
-                    }
-                }
-                // merge vertices by distance in Blender or `Cleaning and Repairing > Merge Close Vertices` in MeshLab
-                for(int i = 0, t = 0; i < faces; i++)
-                {
-                    const int i1 = t++;
-                    const int i2 = t++;
-                    const int i3 = t++;
-                    fprintf(f, "3 %i %i %i\n", i1, i2, i3);
+                    const uint i0 = t++;
+                    const uint i1 = t++;
+                    const uint i2 = t++;
+                    const uint i3 = t++;
+                    fprintf(f, "4 %u %u %u %u\n", i0, i1, i2, i3);
                 }
                 fclose(f);
                 char tmp[16];
                 timestamp(tmp);
-                printf("[%s] Exported PLY: %s\n", tmp, export_path);
+                printf("[%s] Exported PLY: %s (%u quads)\n", tmp, export_path, faces);
             }
         }
         return 0;
