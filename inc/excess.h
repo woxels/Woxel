@@ -808,6 +808,33 @@ static void ply_emit_mz(FILE* f, int z, int x, int y, int w, int h, uchar r, uch
     ply_vert(f, x0, y1, p,  0,0,-1, r,gc,b);
 }
 
+// One quad per visible cube face (no merging). write_verts == 0 counts only.
+uint ply_cube_mesh(FILE* f, const int write_verts)
+{
+    uint faces = 0;
+    FILE* out = write_verts ? f : NULL;
+    for(int x = 0; x < 128; x++)
+    {
+        for(int y = 0; y < 128; y++)
+        {
+            for(int z = 0; z < 128; z++)
+            {
+                const int id = ply_export_id(x, y, z);
+                if(!id){continue;}
+                uchar r, gc, b;
+                if(out){ply_rgb(id, &r, &gc, &b);}
+                if(ply_is_air(x+1, y, z)){faces++; if(out){ply_emit_px(out, x, z, y, 1, 1, r, gc, b);}}
+                if(ply_is_air(x-1, y, z)){faces++; if(out){ply_emit_mx(out, x, z, y, 1, 1, r, gc, b);}}
+                if(ply_is_air(x, y+1, z)){faces++; if(out){ply_emit_py(out, y, z, x, 1, 1, r, gc, b);}}
+                if(ply_is_air(x, y-1, z)){faces++; if(out){ply_emit_my(out, y, z, x, 1, 1, r, gc, b);}}
+                if(ply_is_air(x, y, z+1)){faces++; if(out){ply_emit_pz(out, z, x, y, 1, 1, r, gc, b);}}
+                if(ply_is_air(x, y, z-1)){faces++; if(out){ply_emit_mz(out, z, x, y, 1, 1, r, gc, b);}}
+            }
+        }
+    }
+    return faces;
+}
+
 // write_verts == 0: count quads only. write_verts == 1: emit vertices to f.
 uint ply_greedy_mesh(FILE* f, const int write_verts)
 {
