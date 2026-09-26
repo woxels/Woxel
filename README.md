@@ -41,7 +41,7 @@ Woxel uses intuitive controls akin to Minetest and Minecraft, while providing a 
 
 ### 🖱️ Mouse locks when you click on the window, press ESCAPE / TAB to unlock the mouse.
   
-#### 😲 *Arrow Keys can be used to move the view around.* 🤯
+#### 😲 *Arrow Keys or IJKL can be used to move the view around.* 🤯
 
 #### ✔️ *Your state is automatically saved on exit.*
 
@@ -64,6 +64,18 @@ Woxel uses intuitive controls akin to Minetest and Minecraft, while providing a 
 * `./wox loadgz <file_path>`
 * *e.g;* `./wox loadgz /home/user/file.wox.gz`
 * Same adoption: you can save and export it as a normal project afterwards.
+
+### ⌨️ Keymap
+* `./wox keymap` writes a default `keymap.txt` next to the `wox` binary (`./wox keymap ~/keys.txt` to pick the path).
+* Load a specific file: `./wox --keymap-file ./mykeys.txt Untitled` (also `-k`, `--keymap`, `loadkeymap`).
+* Search order if no flag is given:
+  1. `keymap.txt` next to the `wox` binary
+  2. `./keymap.txt` in the current directory
+  3. `keymap.txt` in the appdata folder (`SDL_GetPrefPath`)
+* Format: `action  key [key ...]`  e.g. `forward W*`  /  `look_up UP I*`
+* A key name is keycode-only. Append `*` (`W*`) to also match the physical scancode.
+* Actions: `forward back left right up down look_left look_right look_up look_down place delete clone replace mirror place_here fast pitch color_prev color_next hud reset save load menu speed1-speed7`
+* The generated default uses `W* A* S* D*` and `I* J* K* L*` so those stay layout-independent.
 
 ### 🪟 Wayland custom window decorations
 * Auto-detected when the SDL video driver is Wayland. Force it on or off from the command line (flag can appear anywhere):

@@ -1042,6 +1042,350 @@ static uint wox_load_any(const char* src, char* resolved, size_t resolved_sz)
 }
 
 //*************************************
+// keymap.txt (optional, next to the wox binary)
+//*************************************
+enum {
+    ACT_FORWARD, ACT_BACK, ACT_LEFT, ACT_RIGHT, ACT_UP, ACT_DOWN,
+    ACT_LOOK_LEFT, ACT_LOOK_RIGHT, ACT_LOOK_UP, ACT_LOOK_DOWN,
+    ACT_PLACE, ACT_DELETE, ACT_CLONE, ACT_REPLACE, ACT_MIRROR, ACT_PLACE_HERE,
+    ACT_FAST, ACT_PITCH, ACT_COLOR_PREV, ACT_COLOR_NEXT,
+    ACT_HUD, ACT_RESET, ACT_SAVE, ACT_LOAD, ACT_MENU,
+    ACT_SPEED1, ACT_SPEED2, ACT_SPEED3, ACT_SPEED4, ACT_SPEED5, ACT_SPEED6, ACT_SPEED7,
+    ACT_COUNT
+};
+
+#define WOX_MAX_BIND 6
+typedef struct { SDL_Keycode sym; SDL_Scancode scan; } wox_bind;
+static wox_bind wox_binds[ACT_COUNT][WOX_MAX_BIND];
+static int wox_bind_n[ACT_COUNT];
+
+static const char* wox_act_name(int a)
+{
+    static const char* n[ACT_COUNT] = {
+        "forward","back","left","right","up","down",
+        "look_left","look_right","look_up","look_down",
+        "place","delete","clone","replace","mirror","place_here",
+        "fast","pitch","color_prev","color_next",
+        "hud","reset","save","load","menu",
+        "speed1","speed2","speed3","speed4","speed5","speed6","speed7"
+    };
+    return (a >= 0 && a < ACT_COUNT) ? n[a] : "";
+}
+
+static int wox_act_from_name(const char* s)
+{
+    if(wox_ieq(s,"forward") || wox_ieq(s,"move_forward") || wox_ieq(s,"w")){return ACT_FORWARD;}
+    if(wox_ieq(s,"back") || wox_ieq(s,"backward") || wox_ieq(s,"move_back")){return ACT_BACK;}
+    if(wox_ieq(s,"left") || wox_ieq(s,"move_left") || wox_ieq(s,"strafe_left")){return ACT_LEFT;}
+    if(wox_ieq(s,"right") || wox_ieq(s,"move_right") || wox_ieq(s,"strafe_right")){return ACT_RIGHT;}
+    if(wox_ieq(s,"up") || wox_ieq(s,"move_up") || wox_ieq(s,"fly_up")){return ACT_UP;}
+    if(wox_ieq(s,"down") || wox_ieq(s,"move_down") || wox_ieq(s,"fly_down")){return ACT_DOWN;}
+    if(wox_ieq(s,"look_left") || wox_ieq(s,"turn_left")){return ACT_LOOK_LEFT;}
+    if(wox_ieq(s,"look_right") || wox_ieq(s,"turn_right")){return ACT_LOOK_RIGHT;}
+    if(wox_ieq(s,"look_up") || wox_ieq(s,"turn_up")){return ACT_LOOK_UP;}
+    if(wox_ieq(s,"look_down") || wox_ieq(s,"turn_down")){return ACT_LOOK_DOWN;}
+    if(wox_ieq(s,"place") || wox_ieq(s,"build")){return ACT_PLACE;}
+    if(wox_ieq(s,"delete") || wox_ieq(s,"remove")){return ACT_DELETE;}
+    if(wox_ieq(s,"clone") || wox_ieq(s,"eyedrop") || wox_ieq(s,"pick")){return ACT_CLONE;}
+    if(wox_ieq(s,"replace") || wox_ieq(s,"paint")){return ACT_REPLACE;}
+    if(wox_ieq(s,"mirror")){return ACT_MIRROR;}
+    if(wox_ieq(s,"place_here") || wox_ieq(s,"place_at")){return ACT_PLACE_HERE;}
+    if(wox_ieq(s,"fast") || wox_ieq(s,"sprint")){return ACT_FAST;}
+    if(wox_ieq(s,"pitch") || wox_ieq(s,"pitch_lock")){return ACT_PITCH;}
+    if(wox_ieq(s,"color_prev") || wox_ieq(s,"prev_color")){return ACT_COLOR_PREV;}
+    if(wox_ieq(s,"color_next") || wox_ieq(s,"next_color")){return ACT_COLOR_NEXT;}
+    if(wox_ieq(s,"hud")){return ACT_HUD;}
+    if(wox_ieq(s,"reset")){return ACT_RESET;}
+    if(wox_ieq(s,"save")){return ACT_SAVE;}
+    if(wox_ieq(s,"load")){return ACT_LOAD;}
+    if(wox_ieq(s,"menu") || wox_ieq(s,"unlock")){return ACT_MENU;}
+    if(wox_ieq(s,"speed1")){return ACT_SPEED1;}
+    if(wox_ieq(s,"speed2")){return ACT_SPEED2;}
+    if(wox_ieq(s,"speed3")){return ACT_SPEED3;}
+    if(wox_ieq(s,"speed4")){return ACT_SPEED4;}
+    if(wox_ieq(s,"speed5")){return ACT_SPEED5;}
+    if(wox_ieq(s,"speed6")){return ACT_SPEED6;}
+    if(wox_ieq(s,"speed7")){return ACT_SPEED7;}
+    return -1;
+}
+
+static int wox_parse_key(const char* s, SDL_Keycode* sym, SDL_Scancode* scan)
+{
+    *sym = SDLK_UNKNOWN;
+    *scan = SDL_SCANCODE_UNKNOWN;
+    if(s == NULL || s[0] == 0){return 0;}
+    if(s[0] == '+' || s[0] == '-'){s++;}
+    if((s[0] >= 'a' && s[0] <= 'z') && s[1] == 0)
+    {
+        const int u = s[0] - 32;
+        *sym = (SDL_Keycode)s[0];
+        *scan = (SDL_Scancode)(SDL_SCANCODE_A + (u - 'A'));
+        return 1;
+    }
+    if((s[0] >= 'A' && s[0] <= 'Z') && s[1] == 0)
+    {
+        *sym = (SDL_Keycode)(s[0] + 32);
+        *scan = (SDL_Scancode)(SDL_SCANCODE_A + (s[0] - 'A'));
+        return 1;
+    }
+    if(s[0] >= '1' && s[0] <= '9' && s[1] == 0)
+    {
+        *sym = (SDL_Keycode)s[0];
+        *scan = (SDL_Scancode)(SDL_SCANCODE_1 + (s[0] - '1'));
+        return 1;
+    }
+    if(s[0] == '0' && s[1] == 0){*sym = SDLK_0; *scan = SDL_SCANCODE_0; return 1;}
+    struct { const char* n; SDL_Keycode k; SDL_Scancode c; } tab[] = {
+        {"left",SDLK_LEFT,SDL_SCANCODE_LEFT},{"right",SDLK_RIGHT,SDL_SCANCODE_RIGHT},
+        {"up",SDLK_UP,SDL_SCANCODE_UP},{"down",SDLK_DOWN,SDL_SCANCODE_DOWN},
+        {"space",SDLK_SPACE,SDL_SCANCODE_SPACE},{"escape",SDLK_ESCAPE,SDL_SCANCODE_ESCAPE},
+        {"esc",SDLK_ESCAPE,SDL_SCANCODE_ESCAPE},{"tab",SDLK_TAB,SDL_SCANCODE_TAB},
+        {"lshift",SDLK_LSHIFT,SDL_SCANCODE_LSHIFT},{"leftshift",SDLK_LSHIFT,SDL_SCANCODE_LSHIFT},
+        {"rshift",SDLK_RSHIFT,SDL_SCANCODE_RSHIFT},{"rightshift",SDLK_RSHIFT,SDL_SCANCODE_RSHIFT},
+        {"lctrl",SDLK_LCTRL,SDL_SCANCODE_LCTRL},{"leftctrl",SDLK_LCTRL,SDL_SCANCODE_LCTRL},
+        {"rctrl",SDLK_RCTRL,SDL_SCANCODE_RCTRL},{"rightctrl",SDLK_RCTRL,SDL_SCANCODE_RCTRL},
+        {"lalt",SDLK_LALT,SDL_SCANCODE_LALT},{"ralt",SDLK_RALT,SDL_SCANCODE_RALT},
+        {"slash",SDLK_SLASH,SDL_SCANCODE_SLASH},{"quote",SDLK_QUOTE,SDL_SCANCODE_APOSTROPHE},
+        {"apostrophe",SDLK_QUOTE,SDL_SCANCODE_APOSTROPHE},
+        {"comma",SDLK_COMMA,SDL_SCANCODE_COMMA},{"period",SDLK_PERIOD,SDL_SCANCODE_PERIOD},
+        {"minus",SDLK_MINUS,SDL_SCANCODE_MINUS},{"equals",SDLK_EQUALS,SDL_SCANCODE_EQUALS},
+        {"enter",SDLK_RETURN,SDL_SCANCODE_RETURN},{"return",SDLK_RETURN,SDL_SCANCODE_RETURN},
+        {"backspace",SDLK_BACKSPACE,SDL_SCANCODE_BACKSPACE},
+        {"f1",SDLK_F1,SDL_SCANCODE_F1},{"f2",SDLK_F2,SDL_SCANCODE_F2},{"f3",SDLK_F3,SDL_SCANCODE_F3},
+        {"f4",SDLK_F4,SDL_SCANCODE_F4},{"f5",SDLK_F5,SDL_SCANCODE_F5},{"f6",SDLK_F6,SDL_SCANCODE_F6},
+        {"f7",SDLK_F7,SDL_SCANCODE_F7},{"f8",SDLK_F8,SDL_SCANCODE_F8},{"f9",SDLK_F9,SDL_SCANCODE_F9},
+        {"f10",SDLK_F10,SDL_SCANCODE_F10},{"f11",SDLK_F11,SDL_SCANCODE_F11},{"f12",SDLK_F12,SDL_SCANCODE_F12},
+        {NULL,0,0}
+    };
+    for(int i = 0; tab[i].n; i++)
+        if(wox_ieq(s, tab[i].n)){*sym = tab[i].k; *scan = tab[i].c; return 1;}
+    return 0;
+}
+
+static void wox_bind_add(int act, SDL_Keycode sym, SDL_Scancode scan)
+{
+    if(act < 0 || act >= ACT_COUNT){return;}
+    if(wox_bind_n[act] >= WOX_MAX_BIND){return;}
+    wox_binds[act][wox_bind_n[act]].sym = sym;
+    wox_binds[act][wox_bind_n[act]].scan = scan;
+    wox_bind_n[act]++;
+}
+
+static void wox_bind_sym(int act, SDL_Keycode sym)
+{
+    wox_bind_add(act, sym, SDL_SCANCODE_UNKNOWN);
+}
+
+static void wox_bind_both(int act, SDL_Keycode sym, SDL_Scancode scan)
+{
+    wox_bind_add(act, sym, scan);
+}
+
+static void wox_keymap_default(void)
+{
+    memset(wox_bind_n, 0, sizeof(wox_bind_n));
+    wox_bind_both(ACT_FORWARD, SDLK_w, SDL_SCANCODE_W);
+    wox_bind_both(ACT_LEFT,    SDLK_a, SDL_SCANCODE_A);
+    wox_bind_both(ACT_BACK,    SDLK_s, SDL_SCANCODE_S);
+    wox_bind_both(ACT_RIGHT,   SDLK_d, SDL_SCANCODE_D);
+    wox_bind_sym(ACT_DOWN, SDLK_LSHIFT);
+    wox_bind_sym(ACT_DOWN, SDLK_LCTRL);
+    wox_bind_sym(ACT_UP, SDLK_SPACE);
+    wox_bind_sym(ACT_LOOK_LEFT, SDLK_LEFT);
+    wox_bind_sym(ACT_LOOK_RIGHT, SDLK_RIGHT);
+    wox_bind_sym(ACT_LOOK_UP, SDLK_UP);
+    wox_bind_sym(ACT_LOOK_DOWN, SDLK_DOWN);
+    wox_bind_both(ACT_LOOK_LEFT, SDLK_j, SDL_SCANCODE_J);
+    wox_bind_both(ACT_LOOK_RIGHT, SDLK_l, SDL_SCANCODE_L);
+    wox_bind_both(ACT_LOOK_UP, SDLK_i, SDL_SCANCODE_I);
+    wox_bind_both(ACT_LOOK_DOWN, SDLK_k, SDL_SCANCODE_K);
+    wox_bind_sym(ACT_PLACE, SDLK_RSHIFT);
+    wox_bind_sym(ACT_DELETE, SDLK_RCTRL);
+    wox_bind_sym(ACT_CLONE, SDLK_q);
+    wox_bind_sym(ACT_CLONE, SDLK_z);
+    wox_bind_sym(ACT_REPLACE, SDLK_e);
+    wox_bind_sym(ACT_MIRROR, SDLK_r);
+    wox_bind_sym(ACT_PLACE_HERE, SDLK_v);
+    wox_bind_sym(ACT_FAST, SDLK_f);
+    wox_bind_sym(ACT_PITCH, SDLK_p);
+    wox_bind_sym(ACT_COLOR_PREV, SDLK_x);
+    wox_bind_sym(ACT_COLOR_PREV, SDLK_SLASH);
+    wox_bind_sym(ACT_COLOR_NEXT, SDLK_c);
+    wox_bind_sym(ACT_COLOR_NEXT, SDLK_QUOTE);
+    wox_bind_sym(ACT_HUD, SDLK_F2);
+    wox_bind_sym(ACT_RESET, SDLK_F1);
+    wox_bind_sym(ACT_SAVE, SDLK_F3);
+    wox_bind_sym(ACT_LOAD, SDLK_F8);
+    wox_bind_sym(ACT_MENU, SDLK_ESCAPE);
+    wox_bind_sym(ACT_MENU, SDLK_TAB);
+    wox_bind_sym(ACT_SPEED1, SDLK_1);
+    wox_bind_sym(ACT_SPEED2, SDLK_2);
+    wox_bind_sym(ACT_SPEED3, SDLK_3);
+    wox_bind_sym(ACT_SPEED4, SDLK_4);
+    wox_bind_sym(ACT_SPEED5, SDLK_5);
+    wox_bind_sym(ACT_SPEED6, SDLK_6);
+    wox_bind_sym(ACT_SPEED7, SDLK_7);
+}
+
+static int bind_hit(int act, const SDL_Event* e)
+{
+    const SDL_Keycode sym = e->key.keysym.sym;
+    const SDL_Scancode scan = e->key.keysym.scancode;
+    for(int i = 0; i < wox_bind_n[act]; i++)
+    {
+        if(wox_binds[act][i].sym != SDLK_UNKNOWN && wox_binds[act][i].sym == sym){return 1;}
+        if(wox_binds[act][i].scan != SDL_SCANCODE_UNKNOWN && wox_binds[act][i].scan == scan){return 1;}
+    }
+    return 0;
+}
+
+static void wox_keymap_path_exe(char* out, size_t n)
+{
+    if(basedir != NULL && basedir[0] != 0){snprintf(out, n, "%skeymap.txt", basedir);}
+    else{snprintf(out, n, "keymap.txt");}
+}
+static void wox_keymap_path_app(char* out, size_t n)
+{
+    if(appdir != NULL && appdir[0] != 0){snprintf(out, n, "%skeymap.txt", appdir);}
+    else{out[0] = 0;}
+}
+
+static const char wox_keymap_default_text[] =
+    "# Woxel keymap.txt — one action per line:  action  key [key ...]\n"
+    "# Place this file next to the wox binary. Lines starting with # are comments.\n"
+    "# Key names: A-Z  0-9  F1-F12  LEFT RIGHT UP DOWN  SPACE TAB ESCAPE\n"
+    "#            LSHIFT RSHIFT LCTRL RCTRL  SLASH QUOTE\n"
+    "# W    = keycode only (the letter W, layout-dependent).\n"
+    "# W*   = keycode and scancode (letter W or the physical W key).\n"
+    "\n"
+    "forward      W*\n"
+    "back         S*\n"
+    "left         A*\n"
+    "right        D*\n"
+    "up           SPACE\n"
+    "down         LSHIFT LCTRL\n"
+    "look_left    LEFT J*\n"
+    "look_right   RIGHT L*\n"
+    "look_up      UP I*\n"
+    "look_down    DOWN K*\n"
+    "place        RSHIFT\n"
+    "delete       RCTRL\n"
+    "clone        Q Z\n"
+    "replace      E\n"
+    "mirror       R\n"
+    "place_here   V\n"
+    "fast         F\n"
+    "pitch        P\n"
+    "color_prev   X SLASH\n"
+    "color_next   C QUOTE\n"
+    "hud          F2\n"
+    "reset        F1\n"
+    "save         F3\n"
+    "load         F8\n"
+    "menu         ESCAPE TAB\n"
+    "speed1       1\n"
+    "speed2       2\n"
+    "speed3       3\n"
+    "speed4       4\n"
+    "speed5       5\n"
+    "speed6       6\n"
+    "speed7       7\n";
+
+static uint wox_keymap_write_default(const char* path)
+{
+    char file[1024];
+    if(path != NULL && path[0] != 0){snprintf(file, sizeof(file), "%s", path);}
+    else{wox_keymap_path_exe(file, sizeof(file));}
+    FILE* f = fopen(file, "w");
+    if(f == NULL)
+    {
+        snprintf(file, sizeof(file), "keymap.txt");
+        f = fopen(file, "w");
+    }
+    if(f == NULL)
+    {
+        printf("ERROR: could not write keymap.txt\n");
+        return 0;
+    }
+    fputs(wox_keymap_default_text, f);
+    fclose(f);
+    printf("Wrote default keymap: %s\n", file);
+    return 1;
+}
+
+static uint wox_keymap_load(const char* path)
+{
+    FILE* f = fopen(path, "r");
+    if(f == NULL){return 0;}
+    char line[256];
+    int loaded = 0;
+    while(fgets(line, sizeof(line), f))
+    {
+        char* s = line;
+        while(*s == ' ' || *s == '\t'){s++;}
+        if(*s == 0 || *s == '#' || *s == '\n' || *s == '\r'){continue;}
+        char* tokens[8];
+        int nt = 0;
+        for(char* p = s; *p && nt < 8;)
+        {
+            while(*p == ' ' || *p == '\t'){p++;}
+            if(*p == 0 || *p == '#' || *p == '\n' || *p == '\r'){break;}
+            tokens[nt++] = p;
+            while(*p && *p != ' ' && *p != '\t' && *p != '\n' && *p != '\r'){p++;}
+            if(*p){*p++ = 0;}
+        }
+        if(nt < 2){continue;}
+        const int act = wox_act_from_name(tokens[0]);
+        if(act < 0)
+        {
+            printf("keymap.txt: unknown action '%s'\n", tokens[0]);
+            continue;
+        }
+        wox_bind_n[act] = 0;
+        for(int i = 1; i < nt; i++)
+        {
+            char key[64];
+            snprintf(key, sizeof(key), "%s", tokens[i]);
+            int both = 0;
+            const size_t kn = strlen(key);
+            if(kn > 0 && key[kn-1] == '*'){key[kn-1] = 0; both = 1;}
+            SDL_Keycode sym; SDL_Scancode scan;
+            if(!wox_parse_key(key, &sym, &scan))
+            {
+                printf("keymap.txt: unknown key '%s'\n", tokens[i]);
+                continue;
+            }
+            if(!both){scan = SDL_SCANCODE_UNKNOWN;}
+            wox_bind_add(act, sym, scan);
+        }
+        loaded++;
+    }
+    fclose(f);
+    printf("Loaded keymap: %s (%d actions)\n", path, loaded);
+    return 1;
+}
+
+static void wox_keymap_init(const char* custom)
+{
+    wox_keymap_default();
+    char file[1024], app[1024];
+    if(custom != NULL && custom[0] != 0)
+    {
+        wox_expand_path(file, sizeof(file), custom);
+        if(!wox_keymap_load(file))
+        {
+            printf("ERROR: could not load keymap: %s\n", file);
+        }
+        return;
+    }
+    wox_keymap_path_exe(file, sizeof(file));
+    if(wox_keymap_load(file)){return;}
+    if(strcmp(file, "keymap.txt") != 0 && wox_keymap_load("keymap.txt")){return;}
+    wox_keymap_path_app(app, sizeof(app));
+    if(app[0] != 0 && strcmp(app, file) != 0){wox_keymap_load(app);}
+}
+
+//*************************************
 // greedy PLY mesher (quads, same-color merge)
 //*************************************
 static int ply_is_air(const int x, const int y, const int z)

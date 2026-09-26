@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+
 //#define BENCH_FPS
 void WOX_QUIT()
 {
@@ -164,10 +165,9 @@ void main_loop()
 
             case SDL_KEYDOWN:
             {
-                if(event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_TAB)
+                if(bind_hit(ACT_MENU, &event))
                 {
                     focus_mouse = 1 - focus_mouse;
-                    //if(focus_mouse == 1){drawHud(1);}else{drawHud(0);}
                     SDL_ShowCursor(1 - focus_mouse);
                     if(wayland == 1)
                     {
@@ -189,22 +189,22 @@ void main_loop()
                         SDL_WarpMouseInWindow(wnd, winw2, winh2);
                     }
                 }
-                else if(event.key.keysym.sym == SDLK_F2)
+                else if(bind_hit(ACT_HUD, &event))
                 {
                     showhud = 1 - showhud;
                 }
                 if(focus_mouse == 0){break;}
-                if(event.key.keysym.sym == SDLK_w){ks[0] = 1;}
-                else if(event.key.keysym.sym == SDLK_a){ks[1] = 1;}
-                else if(event.key.keysym.sym == SDLK_s){ks[2] = 1;}
-                else if(event.key.keysym.sym == SDLK_d){ks[3] = 1;}
-                else if(event.key.keysym.sym == SDLK_LSHIFT || event.key.keysym.sym == SDLK_LCTRL){ks[4] = 1;} // move down Z
-                else if(event.key.keysym.sym == SDLK_LEFT){ks[5] = 1;}
-                else if(event.key.keysym.sym == SDLK_RIGHT){ks[6] = 1;}
-                else if(event.key.keysym.sym == SDLK_UP){ks[7] = 1;}
-                else if(event.key.keysym.sym == SDLK_DOWN){ks[8] = 1;}
-                else if(event.key.keysym.sym == SDLK_SPACE){ks[9] = 1;} // move up Z
-                else if(event.key.keysym.sym == SDLK_SLASH || event.key.keysym.sym == SDLK_x) // - change selected node
+                if(bind_hit(ACT_FORWARD, &event)){ks[0] = 1;}
+                else if(bind_hit(ACT_LEFT, &event)){ks[1] = 1;}
+                else if(bind_hit(ACT_BACK, &event)){ks[2] = 1;}
+                else if(bind_hit(ACT_RIGHT, &event)){ks[3] = 1;}
+                else if(bind_hit(ACT_DOWN, &event)){ks[4] = 1;}
+                else if(bind_hit(ACT_LOOK_LEFT, &event)){ks[5] = 1;}
+                else if(bind_hit(ACT_LOOK_RIGHT, &event)){ks[6] = 1;}
+                else if(bind_hit(ACT_LOOK_UP, &event)){ks[7] = 1;}
+                else if(bind_hit(ACT_LOOK_DOWN, &event)){ks[8] = 1;}
+                else if(bind_hit(ACT_UP, &event)){ks[9] = 1;}
+                else if(bind_hit(ACT_COLOR_PREV, &event))
                 {
                     traceViewPath(0);
                     if(lray > -1 && g.voxels[lray] > 7)
@@ -220,7 +220,7 @@ void main_loop()
                         updateSelectColor();
                     }
                 }
-                else if(event.key.keysym.sym == SDLK_QUOTE || event.key.keysym.sym == SDLK_c) // + change selected node
+                else if(bind_hit(ACT_COLOR_NEXT, &event))
                 {
                     traceViewPath(0);
                     if(lray > -1 && g.voxels[lray] > 7)
@@ -236,7 +236,7 @@ void main_loop()
                         updateSelectColor();
                     }
                 }
-                else if(event.key.keysym.sym == SDLK_RSHIFT) // place a voxel
+                else if(bind_hit(ACT_PLACE, &event))
                 {
                     ptt = t+rrsp;
                     traceViewPath(1);
@@ -248,7 +248,7 @@ void main_loop()
                         }
                     }
                 }
-                else if(event.key.keysym.sym == SDLK_RCTRL) // remove pointed voxel
+                else if(bind_hit(ACT_DELETE, &event))
                 {
                     dtt = t+rrsp;
                     traceViewPath(0);
@@ -257,7 +257,7 @@ void main_loop()
                         voxel_set_brush(ghp.x, ghp.y, ghp.z, 0);
                     }
                 }
-                else if(event.key.keysym.sym == SDLK_q || event.key.keysym.sym == SDLK_z) // clone pointed voxel color
+                else if(bind_hit(ACT_CLONE, &event))
                 {
                     traceViewPath(0);
                     if(lray > -1)
@@ -270,7 +270,7 @@ void main_loop()
                         else{sprintf(warnm, "This is a system color you cannot clone this."); wti = t+1.f;}
                     }
                 }
-                else if(event.key.keysym.sym == SDLK_e) // replace pointed voxel
+                else if(bind_hit(ACT_REPLACE, &event))
                 {
                     rtt = t+rrsp;
                     traceViewPath(0);
@@ -279,11 +279,11 @@ void main_loop()
                         voxel_set_brush(ghp.x, ghp.y, ghp.z, pal_voxel());
                     }
                 }
-                else if(event.key.keysym.sym == SDLK_r) // toggle mirror brush
+                else if(bind_hit(ACT_MIRROR, &event))
                 {
                     mirror = 1 - mirror;
                 }
-                else if(event.key.keysym.sym == SDLK_v) // place voxel at current position
+                else if(bind_hit(ACT_PLACE_HERE, &event))
                 {
                     vec p = g.pp;
                     vInv(&p);
@@ -296,64 +296,64 @@ void main_loop()
                         voxel_set(rp.x, rp.y, rp.z, 8);
                     }
                 }
-                else if(event.key.keysym.sym == SDLK_f) // toggle movement speeds
+                else if(bind_hit(ACT_FAST, &event))
                 {
                     fks = 1 - fks;
                     if(fks){g.ms = g.cms;}
                        else{g.ms = g.lms;}
                 }
-                else if(event.key.keysym.sym == SDLK_1)
+                else if(bind_hit(ACT_SPEED1, &event))
                 {
                     g.ms = 9.3f;
                     if(fks){g.cms=g.ms;}else{g.lms=g.ms;}
                 }
-                else if(event.key.keysym.sym == SDLK_2)
+                else if(bind_hit(ACT_SPEED2, &event))
                 {
                     g.ms = 18.6f;
                     if(fks){g.cms=g.ms;}else{g.lms=g.ms;}
                 }
-                else if(event.key.keysym.sym == SDLK_3)
+                else if(bind_hit(ACT_SPEED3, &event))
                 {
                     g.ms = 37.2f;
                     if(fks){g.cms=g.ms;}else{g.lms=g.ms;}
                 }
-                else if(event.key.keysym.sym == SDLK_4)
+                else if(bind_hit(ACT_SPEED4, &event))
                 {
                     g.ms = 74.4f;
                     if(fks){g.cms=g.ms;}else{g.lms=g.ms;}
                 }
-                else if(event.key.keysym.sym == SDLK_5)
+                else if(bind_hit(ACT_SPEED5, &event))
                 {
                     g.ms = 148.8f;
                     if(fks){g.cms=g.ms;}else{g.lms=g.ms;}
                 }
-                else if(event.key.keysym.sym == SDLK_6)
+                else if(bind_hit(ACT_SPEED6, &event))
                 {
                     g.ms = 297.6f;
                     if(fks){g.cms=g.ms;}else{g.lms=g.ms;}
                 }
-                else if(event.key.keysym.sym == SDLK_7)
+                else if(bind_hit(ACT_SPEED7, &event))
                 {
                     g.ms = 595.2f;
                     if(fks){g.cms=g.ms;}else{g.lms=g.ms;}
                 }
-                else if(event.key.keysym.sym == SDLK_F1)
+                else if(bind_hit(ACT_RESET, &event))
                 {
                     SDL_SetWindowSize(wnd, 1024, 768);
                     WOX_POP(1024, 768);
                     defaultState(0);
                     fks = 0;
                 }
-                else if(event.key.keysym.sym == SDLK_F3)
+                else if(bind_hit(ACT_SAVE, &event))
                 {
                     saveState(openTitle, "", load_state);
                 }
-                else if(event.key.keysym.sym == SDLK_F8)
+                else if(bind_hit(ACT_LOAD, &event))
                 {
                     loadState(openTitle, 0);
                     mark_dirty_full();
                 }
-                else if(event.key.keysym.sym == SDLK_p)
+                else if(bind_hit(ACT_PITCH, &event))
                 {
                     g.plock = 1 - g.plock;
                 }
@@ -364,19 +364,19 @@ void main_loop()
             case SDL_KEYUP:
             {
                 if(focus_mouse == 0){break;}
-                if(event.key.keysym.sym == SDLK_w){ks[0] = 0;}
-                else if(event.key.keysym.sym == SDLK_a){ks[1] = 0;}
-                else if(event.key.keysym.sym == SDLK_s){ks[2] = 0;}
-                else if(event.key.keysym.sym == SDLK_d){ks[3] = 0;}
-                else if(event.key.keysym.sym == SDLK_LSHIFT || event.key.keysym.sym == SDLK_LCTRL){ks[4] = 0;}
-                else if(event.key.keysym.sym == SDLK_LEFT){ks[5] = 0;}
-                else if(event.key.keysym.sym == SDLK_RIGHT){ks[6] = 0;}
-                else if(event.key.keysym.sym == SDLK_UP){ks[7] = 0;}
-                else if(event.key.keysym.sym == SDLK_DOWN){ks[8] = 0;}
-                else if(event.key.keysym.sym == SDLK_SPACE){ks[9] = 0;}
-                else if(event.key.keysym.sym == SDLK_RSHIFT){ptt = 0.f;}
-                else if(event.key.keysym.sym == SDLK_RCTRL){dtt = 0.f;}
-                else if(event.key.keysym.sym == SDLK_e){rtt = 0.f;}
+                if(bind_hit(ACT_FORWARD, &event)){ks[0] = 0;}
+                else if(bind_hit(ACT_LEFT, &event)){ks[1] = 0;}
+                else if(bind_hit(ACT_BACK, &event)){ks[2] = 0;}
+                else if(bind_hit(ACT_RIGHT, &event)){ks[3] = 0;}
+                else if(bind_hit(ACT_DOWN, &event)){ks[4] = 0;}
+                else if(bind_hit(ACT_LOOK_LEFT, &event)){ks[5] = 0;}
+                else if(bind_hit(ACT_LOOK_RIGHT, &event)){ks[6] = 0;}
+                else if(bind_hit(ACT_LOOK_UP, &event)){ks[7] = 0;}
+                else if(bind_hit(ACT_LOOK_DOWN, &event)){ks[8] = 0;}
+                else if(bind_hit(ACT_UP, &event)){ks[9] = 0;}
+                else if(bind_hit(ACT_PLACE, &event)){ptt = 0.f;}
+                else if(bind_hit(ACT_DELETE, &event)){dtt = 0.f;}
+                else if(bind_hit(ACT_REPLACE, &event)){rtt = 0.f;}
                 idle = t;
             }
             break;
@@ -947,7 +947,9 @@ void drawHud(const uint type)
 
         top += 11;
         a = drawText(sHud, "P ", left, top, 2);
-        drawText(sHud, "Toggle pitch lock.", a, top, 1);
+        a = drawText(sHud, "Toggle pitch lock.", a, top, 1);
+        a = drawText(sHud, " IJKL", a, top, 2);
+        drawText(sHud, "/Arrows look around.", a, top, 1);
 
         top += 22;
         a = drawText(sHud, "Left Click ", left, top, 2);
@@ -1206,7 +1208,7 @@ int main(int argc, char** argv)
     printf("F2 = Toggle HUD visibility.\n");
     printf("F3 = Save. (auto saves on exit, backup made if idle for 3 mins)\n");
     printf("F8 = Load. (will erase what you have done since the last save)\n");
-    printf("\n* Arrow Keys can be used to move the view around.\n");
+    printf("\n* Arrow Keys or IJKL can be used to move the view around.\n");
     printf("* Your state is automatically saved on exit.\n");
     printf("\nConsole Arguments:\n");
     printf("./wox <project_name> <[OPTIONAL]mouse_sensitivity> <[OPTIONAL]color_palette_file_path>\n");
@@ -1220,6 +1222,10 @@ int main(int argc, char** argv)
     printf("To load Base64: ./wox loadb64 <file_path>\n");
     printf("e.g; ./wox loadb64 /home/user/file.b64\n");
     printf("Loaded files are adopted as a project (basename) so F3 / exit can save them.\n\n");
+    printf("Keymap: ./wox keymap [path]   (writes default keymap.txt next to the binary)\n");
+    printf("Load a keymap: ./wox --keymap-file ./mykeys.txt   (also -k / --keymap / loadkeymap)\n");
+    printf("Search order: --keymap-file, then keymap.txt next to wox, then appdata keymap.txt\n");
+    printf("Format: action  key [key ...]    suffix * = keycode+scancode (e.g. W*)\n\n");
     printf("Wayland custom decorations: ./wox --wayland [project]\n");
     printf("e.g; ./wox --wayland Untitled\n");
     printf("Force native decorations: ./wox --no-wayland  (also --x11)\n");
@@ -1252,6 +1258,7 @@ int main(int argc, char** argv)
     uint adopt_title = 0;
     uint loaded_ok = 0;
     uint wayland_cli = 0; // 0 auto, 1 force custom decor, 2 force native
+    char keymap_cli[1024] = {0};
     {
         int n = 1;
         for(int i = 1; i < argc; i++)
@@ -1268,10 +1275,26 @@ int main(int argc, char** argv)
                 wayland_cli = 2;
                 continue;
             }
+            if(wox_ieq(argv[i], "--keymap-file") || wox_ieq(argv[i], "-k") ||
+               wox_ieq(argv[i], "--keymap") || wox_ieq(argv[i], "loadkeymap"))
+            {
+                if(i + 1 < argc)
+                {
+                    wox_expand_path(keymap_cli, sizeof(keymap_cli), argv[++i]);
+                    continue;
+                }
+            }
             argv[n++] = argv[i];
         }
         argc = n;
     }
+    if(argc >= 2 && (wox_ieq(argv[1], "keymap") ||
+                     wox_ieq(argv[1], "write-keymap") || wox_ieq(argv[1], "--write-keymap")))
+    {
+        wox_keymap_write_default((argc >= 3) ? argv[2] : NULL);
+        return 0;
+    }
+    wox_keymap_init(keymap_cli[0] ? keymap_cli : NULL);
     if(argc >= 2 && strlen(argv[1]) < 256)
     {
         sprintf(openTitle, "%s", argv[1]);
