@@ -864,7 +864,7 @@ static uint ply_greedy_slice(FILE* f, int* mask, const int dim_u, const int dim_
 
             uchar r, gc, b;
             ply_rgb(id, &r, &gc, &b);
-            if(f != NULL && emit != NULL){emit(f, slice, u, v, w, h, r, gc, b);}
+            if(emit != NULL){emit(f, slice, u, v, w, h, r, gc, b);}
             quads++;
 
             for(int dv = 0; dv < h; dv++)
