@@ -37,8 +37,6 @@ Woxel uses intuitive controls akin to Minetest and Minecraft, while providing a 
 * **F2** = Toggle HUD visibility.
 * **F3** = Save. (auto saves on exit, backup made if idle for 3 mins.)
 * **F8** = Load. (will erase what you have done since the last save)
-* **F10** = Import voxel scene as Base64.
-* **F11** = Export voxel scene as Base64.
 * **ESCAPE / TAB** = Toggle menu.
 
 ### 🖱️ Mouse locks when you click on the window, press ESCAPE / TAB to unlock the mouse.
@@ -55,7 +53,7 @@ Woxel uses intuitive controls akin to Minetest and Minecraft, while providing a 
 * 2nd, "0.003", Mouse sensitivity.
 * 3rd, "/tmp/colors.txt", path to a color palette file, the file must contain a hex color on each new line, 32 colors maximum. e.g; "#00FFFF".
 * Find color palettes at; https://lospec.com/palette-list
-* You can use any palette upto 32 colors. But don't use #000000 (Black) in your color palette as it will terminate at that color.
+* You can use any palette up to 32 colors. `#000000` (Black) is a valid color and does not truncate the list.
 
 ### 📂 Load Base64 from file
 * `./wox loadb64 <file_path>`

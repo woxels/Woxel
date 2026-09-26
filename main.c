@@ -51,7 +51,7 @@ static SDL_HitTestResult SDLCALL hitTest(SDL_Window *window, const SDL_Point *pt
 void drawHud(uint type);
 
 //*************************************
-// Base64 import / export (from web main2.c F10/F11)
+// Base64 import / export (CLI: loadb64 / export b64)
 // Web version gzip/zlib-compresses game_state then Base64-encodes it
 // so the scene can be copied, shared, and pasted back.
 //*************************************
@@ -358,6 +358,7 @@ uint loadBase64(const char* path)
     }
 
     memcpy(&g, &ng, sizeof(game_state));
+    pal_clamp_st();
     fks = (g.ms == g.cms);
     has_changed = 1;
     if(sHud != NULL){updateSelectColor();}
@@ -529,34 +530,14 @@ void main_loop()
                     traceViewPath(0);
                     if(lray > -1 && g.voxels[lray] > 7)
                     {
-                        g.voxels[lray]--;
-                        g.st = g.voxels[lray];
-                        if(g.st < 8.f || g.colors[g.voxels[lray]] == 0)
-                        {
-                            if(g.colors[0] != 0)
-                            {
-                                uint i = 7;
-                                for(NULL; i < 40 && g.colors[i] != 0; i++){}
-                                g.st = (float)(i-1);
-                                g.voxels[lray] = i-1;
-                                has_changed = 1;
-                            }
-                        }
+                        g.voxels[lray] = (uchar)pal_prev((float)g.voxels[lray]);
+                        g.st = (float)g.voxels[lray];
+                        has_changed = 1;
                         updateSelectColor();
                     }
                     else
                     {
-                        g.st -= 1.f;
-                        if(g.st < 8.f || g.colors[(uint)g.st] == 0)
-                        {
-                            if(g.colors[0] != 0)
-                            {
-                                uint i = 7;
-                                for(NULL; i < 40 && g.colors[i] != 0; i++){}
-                                g.st = (float)(i-1);
-                                has_changed = 1;
-                            }
-                        }
+                        g.st = pal_prev(g.st);
                         updateSelectColor();
                     }
                 }
@@ -565,20 +546,14 @@ void main_loop()
                     traceViewPath(0);
                     if(lray > -1 && g.voxels[lray] > 7)
                     {
-                        g.voxels[lray]++;
-                        g.st = g.voxels[lray];
-                        if(g.st > 39.f || g.colors[g.voxels[lray]] == 0)
-                        {
-                            g.st = 8.f;
-                            g.voxels[lray] = g.st;
-                            has_changed = 1;
-                        }
+                        g.voxels[lray] = (uchar)pal_next((float)g.voxels[lray]);
+                        g.st = (float)g.voxels[lray];
+                        has_changed = 1;
                         updateSelectColor();
                     }
                     else
                     {
-                        g.st += 1.f;
-                        if(g.st > 39.f || g.colors[(uint)g.st] == 0){g.st = 8.f;}
+                        g.st = pal_next(g.st);
                         updateSelectColor();
                     }
                 }
@@ -590,11 +565,11 @@ void main_loop()
                     {
                         if(g.pb.w == 1 && isInBounds(g.pb) && g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] == 0)
                         {
-                            g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = g.st;
+                            g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = pal_voxel();
                             if(mirror == 1)
                             {
                                 const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
-                                g.voxels[PTI(x, g.pb.y, g.pb.z)] = g.st;
+                                g.voxels[PTI(x, g.pb.y, g.pb.z)] = pal_voxel();
                             }
                             has_changed = 1;
                         }
@@ -622,7 +597,7 @@ void main_loop()
                     {
                         if(g.voxels[lray] > 7)
                         {
-                            g.st = g.voxels[lray];
+                            g.st = (float)g.voxels[lray];
                             updateSelectColor();
                         }
                         else{sprintf(warnm, "This is a system color you cannot clone this."); wti = t+1.f;}
@@ -634,11 +609,11 @@ void main_loop()
                     traceViewPath(0);
                     if(lray > -1)
                     {
-                        g.voxels[lray] = g.st;
+                        g.voxels[lray] = pal_voxel();
                         if(mirror == 1)
                         {
                             const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
-                            g.voxels[PTI(x, ghp.y, ghp.z)] = g.st;
+                            g.voxels[PTI(x, ghp.y, ghp.z)] = pal_voxel();
                         }
                         has_changed = 1;
                     }
@@ -718,14 +693,6 @@ void main_loop()
                     loadState(openTitle, 0);
 					has_changed = 1;
                 }
-                else if(event.key.keysym.sym == SDLK_F10)
-                {
-                    loadBase64(NULL);
-                }
-                else if(event.key.keysym.sym == SDLK_F11)
-                {
-                    saveBase64(NULL);
-                }
                 else if(event.key.keysym.sym == SDLK_p)
                 {
                     g.plock = 1 - g.plock;
@@ -762,22 +729,12 @@ void main_loop()
 
                 if(event.wheel.y < 0)
                 {
-                    g.st += 1.f;
-                    if(g.st > 39.f || g.colors[(uint)g.st-1] == 0){g.st = 8.f;}
+                    g.st = pal_next(g.st);
                     updateSelectColor();
                 }
                 else if(event.wheel.y > 0)
                 {
-                    g.st -= 1.f;
-                    if(g.st < 8.f || g.colors[(uint)g.st] == 0)
-                    {
-                        if(g.colors[0] != 0)
-                        {
-                            uint i = 7;
-                            for(NULL; i < 39 && g.colors[i] != 0; i++){}
-                            g.st = (float)(i);
-                        }
-                    }
+                    g.st = pal_prev(g.st);
                     updateSelectColor();
                 }
             }
@@ -919,11 +876,11 @@ void main_loop()
                     {
                         if(g.pb.w == 1 && isInBounds(g.pb) && g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] == 0)
                         {
-                            g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = g.st;
+                            g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = pal_voxel();
                             if(mirror == 1)
                             {
                                 const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
-                                g.voxels[PTI(x, g.pb.y, g.pb.z)] = g.st;
+                                g.voxels[PTI(x, g.pb.y, g.pb.z)] = pal_voxel();
                             }
                             has_changed = 1;
                         }
@@ -951,7 +908,7 @@ void main_loop()
                     {
                         if(g.voxels[lray] > 7)
                         {
-                            g.st = g.voxels[lray];
+                            g.st = (float)g.voxels[lray];
                             updateSelectColor();
                         }
                         else{sprintf(warnm, "This is a system color you cannot clone this."); wti = t+1.f;}
@@ -963,11 +920,11 @@ void main_loop()
                     traceViewPath(0);
                     if(lray > -1)
                     {
-                        g.voxels[lray] = g.st;
+                        g.voxels[lray] = pal_voxel();
                         if(mirror == 1)
                         {
                             const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
-                            g.voxels[PTI(x, ghp.y, ghp.z)] = g.st;
+                            g.voxels[PTI(x, ghp.y, ghp.z)] = pal_voxel();
                         }
                         has_changed = 1;
                     }
@@ -1002,11 +959,11 @@ void main_loop()
             {
                 if(g.pb.w == 1 && isInBounds(g.pb) && g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] == 0)
                 {
-                    g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = g.st;
+                    g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = pal_voxel();
                     if(mirror == 1)
                     {
                         const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
-                        g.voxels[PTI(x, g.pb.y, g.pb.z)] = g.st;
+                        g.voxels[PTI(x, g.pb.y, g.pb.z)] = pal_voxel();
                     }
                     has_changed = 1;
                 }
@@ -1035,11 +992,11 @@ void main_loop()
             traceViewPath(0);
             if(lray > -1)
             {
-                g.voxels[lray] = g.st;
+                g.voxels[lray] = pal_voxel();
                 if(mirror == 1)
                 {
                     const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
-                    g.voxels[PTI(x, ghp.y, ghp.z)] = g.st;
+                    g.voxels[PTI(x, ghp.y, ghp.z)] = pal_voxel();
                 }
                 has_changed = 1;
             }
@@ -1326,8 +1283,8 @@ void drawHud(const uint type)
         // center hud
         const int left = winw2-177;
         int top = winh2-152;
-        SDL_FillRect(sHud, &(SDL_Rect){winw2-193, top-3, 382, 323}, 0x33FFFFFF);
-        SDL_FillRect(sHud, &(SDL_Rect){winw2-190, top, 376, 317}, 0xCC000000);
+        SDL_FillRect(sHud, &(SDL_Rect){winw2-193, top-3, 382, 303}, 0x33FFFFFF);
+        SDL_FillRect(sHud, &(SDL_Rect){winw2-190, top, 376, 297}, 0xCC000000);
         int a = drawText(sHud, "Woxel", winw2-15, top+11, 3);
         a = drawText(sHud, appVersion, left+330, top+11, 4);
         a = drawText(sHud, "woxels.github.io", left, top+11, 4);
@@ -1400,14 +1357,6 @@ void drawHud(const uint type)
         a = drawText(sHud, "F8 ", left, top, 2);
         drawText(sHud, "Load. Will erase what you have done since the last save.", a, top, 1);
 
-        top += 11;
-        a = drawText(sHud, "F10 ", left, top, 2);
-        drawText(sHud, "Import voxel scene as Base64.", a, top, 1);
-
-        top += 11;
-        a = drawText(sHud, "F11 ", left, top, 2);
-        drawText(sHud, "Export voxel scene as Base64.", a, top, 1);
-
         top += 21;
         drawText(sHud, "Check the console output for more information.", left, top, 3);
 
@@ -1416,7 +1365,7 @@ void drawHud(const uint type)
             const uint left2 = left+(i*22);
             {
                 uint tu = g.colors[7+i];
-                if(tu != 0)
+                if(i < g.pal_n)
                 {
                     uchar r = (tu & 0x00FF0000) >> 16;
                     uchar gc = (tu & 0x0000FF00) >> 8;
@@ -1439,7 +1388,7 @@ void drawHud(const uint type)
             }
             {
                 uint tu = g.colors[23+i];
-                if(tu != 0)
+                if((16+i) < g.pal_n)
                 {
                     uchar r = (tu & 0x00FF0000) >> 16;
                     uchar gc = (tu & 0x0000FF00) >> 8;
@@ -1549,12 +1498,12 @@ void drawHud(const uint type)
             const uint left = hso+(i*22);
             {
                 uint tu = g.colors[7+i];
-                if(tu != 0)
+                if(i < g.pal_n)
                 {
                     uchar r = (tu & 0x00FF0000) >> 16;
                     uchar gc = (tu & 0x0000FF00) >> 8;
                     uchar b = (tu & 0x000000FF);
-                    if(g.st-1 == 7+i)
+                    if(pal_color_index() == 7+i)
                         SDL_FillRect(sHud, &(SDL_Rect){left, 11, 20, 20}, 0xFFFFFFFF);
                     else
                         SDL_FillRect(sHud, &(SDL_Rect){left, 11, 20, 20}, 0xFF000000);
@@ -1563,12 +1512,12 @@ void drawHud(const uint type)
             }
             {
                 uint tu = g.colors[23+i];
-                if(tu != 0)
+                if((16+i) < g.pal_n)
                 {
                     uchar r = (tu & 0x00FF0000) >> 16;
                     uchar gc = (tu & 0x0000FF00) >> 8;
                     uchar b = (tu & 0x000000FF);
-                    if(g.st-1 == 23+i)
+                    if(pal_color_index() == 23+i)
                         SDL_FillRect(sHud, &(SDL_Rect){left, 33, 20, 20}, 0xFFFFFFFF);
                     else
                         SDL_FillRect(sHud, &(SDL_Rect){left, 33, 20, 20}, 0xFF000000);
@@ -1801,8 +1750,6 @@ int main(int argc, char** argv)
     printf("F2 = Toggle HUD visibility.\n");
     printf("F3 = Save. (auto saves on exit, backup made if idle for 3 mins)\n");
     printf("F8 = Load. (will erase what you have done since the last save)\n");
-    printf("F10 = Import voxel scene as Base64.\n");
-    printf("F11 = Export voxel scene as Base64.\n");
     printf("\n* Arrow Keys can be used to move the view around.\n");
     printf("* Your state is automatically saved on exit.\n");
     printf("\nConsole Arguments:\n");
@@ -1828,7 +1775,7 @@ int main(int argc, char** argv)
     printf("e.g; ./wox export ~/file.wox.gz txt ./file.txt\n");
     printf("Format is optional if the output path ends in .ply/.txt/.vv/.b64/.wox.gz\n\n");
     printf("Find more color palettes at; https://lospec.com/palette-list\n");
-    printf("You can use any palette upto 32 colors. But don't use #000000 (Black)\nin your color palette as it will terminate at that color.\n\n");
+    printf("You can use any palette up to 32 colors. #000000 (Black) is a valid color.\n\n");
     printf("Default 32 Color Palette: https://lospec.com/palette-list/resurrect-32\n");
     printf("\n----\n");
 
@@ -1972,6 +1919,8 @@ int main(int argc, char** argv)
         g.colors[4] = 32768;
         g.colors[5] = 255;
         g.colors[6] = 128;
+        g.pal_n = 32;
+        g.st = 8.f;
         // user palette
         g.colors[7] = 16777215;
         g.colors[8] = 16476957;
@@ -2082,14 +2031,20 @@ int main(int argc, char** argv)
                             uchar b = (tu & 0x000000FF);
                             if(r != 0 || gc != 0 || b != 0)
                             {
-                                if( x <=   0 || y <=   0 || z <=   0 ||
-                                    x >= 127 || y >= 127 || z >= 127 ||
-                                    g.voxels[PTIB(x-1, y, z)] == 0 ||
-                                    g.voxels[PTIB(x+1, y, z)] == 0 ||
-                                    g.voxels[PTIB(x, y-1, z)] == 0 ||
-                                    g.voxels[PTIB(x, y+1, z)] == 0 ||
-                                    g.voxels[PTIB(x, y, z-1)] == 0 ||
-                                    g.voxels[PTIB(x, y, z+1)] == 0 )
+                                const int nx0 = PTIB((int)x-1, (int)y, (int)z);
+                                const int nx1 = PTIB((int)x+1, (int)y, (int)z);
+                                const int ny0 = PTIB((int)x, (int)y-1, (int)z);
+                                const int ny1 = PTIB((int)x, (int)y+1, (int)z);
+                                const int nz0 = PTIB((int)x, (int)y, (int)z-1);
+                                const int nz1 = PTIB((int)x, (int)y, (int)z+1);
+                                if( nx0 < 0 || ny0 < 0 || nz0 < 0 ||
+                                    nx1 < 0 || ny1 < 0 || nz1 < 0 ||
+                                    g.voxels[nx0] == 0 ||
+                                    g.voxels[nx1] == 0 ||
+                                    g.voxels[ny0] == 0 ||
+                                    g.voxels[ny1] == 0 ||
+                                    g.voxels[nz0] == 0 ||
+                                    g.voxels[nz1] == 0 )
                                 {
                                     fprintf(f, "%i %i %i %02X%02X%02X\n", ((int)x)-64, ((int)y)-64, z, r, gc, b);
                                 }
@@ -2110,7 +2065,8 @@ int main(int argc, char** argv)
             {
                 const int greedy = (ply_mode == 0);
                 const int tris = (ply_mode == 2);
-                const uint nquad = greedy ? ply_greedy_mesh(NULL, 0) : ply_cube_mesh(NULL, 0);
+                ply_mem_reset();
+                const uint nquad = greedy ? ply_greedy_mesh(NULL, 1) : ply_cube_mesh(NULL, 1);
                 const uint vc = nquad * 4;
                 const uint nface = tris ? (nquad * 2) : nquad;
                 const char* mode_name = greedy ? "greedy" : (tris ? "tris" : "quads");
@@ -2136,8 +2092,8 @@ int main(int argc, char** argv)
                 fprintf(f, "element face %u\n", nface);
                 fprintf(f, "property list uchar uint vertex_indices\n");
                 fprintf(f, "end_header\n");
-                if(greedy){ply_greedy_mesh(f, 1);}
-                else{ply_cube_mesh(f, 1);}
+                ply_mem_flush(f);
+                ply_mem_free();
                 for(uint i = 0, t = 0; i < nquad; i++)
                 {
                     const uint i0 = t++;
