@@ -733,7 +733,7 @@ void main_loop()
 
     if(focus_mouse == 1)
     {
-        if(ptt != 0.f && t > ptt)
+        if(ptt != 0.f && t > ptt) // place trigger
         {
             traceViewPath(1);
             if(lray > -1)
@@ -745,7 +745,7 @@ void main_loop()
             }
             ptt = t+0.1f;
         }
-        if(dtt != 0.f && t > dtt)
+        if(dtt != 0.f && t > dtt) // delete rigger
         {
             traceViewPath(0);
             if(lray > -1)
@@ -754,7 +754,7 @@ void main_loop()
             }
             dtt = t+0.1f;
         }
-        if(rtt != 0.f)
+        if(rtt != 0.f) // replace trigger
         {
             traceViewPath(0);
             if(lray > -1)
