@@ -10,8 +10,6 @@
 #include "excess.h"
 #include <string.h>
 #include <stdlib.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 
 //#define BENCH_FPS
 void WOX_QUIT()
@@ -1239,7 +1237,7 @@ int main(int argc, char** argv)
     printf("e.g; ./wox export Untitled ply quads ./file.ply\n");
     printf("e.g; ./wox export Untitled ply tris ./file.ply\n");
     printf("e.g; ./wox export ./file.b64 greedy ./file.ply\n");
-    printf("e.g; ./wox export ~/file.wox.gz txt ./file.txt\n");
+    printf("e.g; ./wox export ./file.wox.gz txt ./file.txt\n");
     printf("Format is optional if the output path ends in .ply/.txt/.vv/.b64/.wox.gz\n\n");
     printf("Find more color palettes at; https://lospec.com/palette-list\n");
     printf("You can use any palette up to 32 colors. #000000 (Black) is a valid color.\n\n");
@@ -1284,7 +1282,7 @@ int main(int argc, char** argv)
             {
                 if(i + 1 < argc)
                 {
-                    wox_expand_path(keymap_cli, sizeof(keymap_cli), argv[++i]);
+                    snprintf(keymap_cli, sizeof(keymap_cli), "%s", argv[++i]);
                     continue;
                 }
             }
@@ -1305,12 +1303,12 @@ int main(int argc, char** argv)
     }
     if(argc >= 3 && strcmp(argv[1], "loadgz") == 0 && strlen(argv[2]) < 1024)
     {
-        wox_expand_path(source_path, sizeof(source_path), argv[2]);
+        snprintf(source_path, sizeof(source_path), "%s", argv[2]);
         adopt_title = 1;
     }
     if(argc >= 3 && strcmp(argv[1], "loadb64") == 0 && strlen(argv[2]) < 1024)
     {
-        wox_expand_path(source_path, sizeof(source_path), argv[2]);
+        snprintf(source_path, sizeof(source_path), "%s", argv[2]);
         adopt_title = 1;
     }
     if(argc >= 2 && strcmp(argv[1], "export") == 0)
@@ -1322,12 +1320,12 @@ int main(int argc, char** argv)
             printf("       ./wox export ./scene.b64 ply quads ./scene.ply\n");
             return 1;
         }
-        wox_expand_path(source_path, sizeof(source_path), argv[2]);
+        snprintf(source_path, sizeof(source_path), "%s", argv[2]);
         if(argc >= 6)
         {
             int fmt = wox_parse_format(argv[3]);
             const int mode = wox_parse_ply_mode(argv[4]);
-            wox_expand_path(export_path, sizeof(export_path), argv[5]);
+            snprintf(export_path, sizeof(export_path), "%s", argv[5]);
             if(fmt < 0){fmt = wox_parse_format(argv[5]);}
             if(fmt < 0)
             {
@@ -1346,7 +1344,7 @@ int main(int argc, char** argv)
         {
             int fmt = wox_parse_format(argv[3]);
             const int mode = wox_parse_ply_mode(argv[3]);
-            wox_expand_path(export_path, sizeof(export_path), argv[4]);
+            snprintf(export_path, sizeof(export_path), "%s", argv[4]);
             if(fmt < 0){fmt = wox_parse_format(argv[4]);}
             if(fmt < 0)
             {
@@ -1358,7 +1356,7 @@ int main(int argc, char** argv)
         }
         else
         {
-            wox_expand_path(export_path, sizeof(export_path), argv[3]);
+            snprintf(export_path, sizeof(export_path), "%s", argv[3]);
             const int fmt = wox_parse_format(argv[3]);
             if(fmt < 0)
             {

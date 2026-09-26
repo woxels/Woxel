@@ -14,8 +14,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <zlib.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengles2.h>
@@ -665,21 +663,6 @@ static int b64_is_filepath(const char* s)
     return 0;
 }
 
-static void b64_mkdirs(const char* path)
-{
-    char buf[1024];
-    snprintf(buf, sizeof(buf), "%s", path);
-    for(char* p = buf + 1; *p; p++)
-    {
-        if(*p == '/' || *p == '\\')
-        {
-            *p = 0;
-            mkdir(buf, 0755);
-            *p = '/';
-        }
-    }
-}
-
 static void b64_resolve_path(char* out, size_t outsz, const char* path)
 {
     if(path != NULL && path[0] != 0)
@@ -724,7 +707,6 @@ uint saveBase64(const char* path)
         return 0;
     }
 
-    b64_mkdirs(file);
     FILE* f = fopen(file, "w");
     if(f == NULL)
     {
@@ -892,21 +874,6 @@ static int wox_ieq(const char* a, const char* b)
     return *a == 0 && *b == 0;
 }
 
-static void wox_expand_path(char* out, size_t outsz, const char* path)
-{
-    if(path == NULL){out[0] = 0; return;}
-    if(path[0] == '~' && (path[1] == '/' || path[1] == '\\' || path[1] == 0))
-    {
-        const char* home = getenv("HOME");
-        if(home != NULL && home[0] != 0)
-        {
-            snprintf(out, outsz, "%s%s", home, path + 1);
-            return;
-        }
-    }
-    snprintf(out, outsz, "%s", path);
-}
-
 static int wox_file_exists(const char* path)
 {
     FILE* f = fopen(path, "rb");
@@ -990,7 +957,7 @@ static uint wox_load_file(const char* path)
 static uint wox_load_any(const char* src, char* resolved, size_t resolved_sz)
 {
     char path[1024], alt[1024];
-    wox_expand_path(path, sizeof(path), src);
+    snprintf(path, sizeof(path), "%s", src ? src : "");
 
     if(wox_file_exists(path))
     {
@@ -1356,7 +1323,7 @@ static void wox_keymap_init(const char* custom)
     char file[1024], app[1024];
     if(custom != NULL && custom[0] != 0)
     {
-        wox_expand_path(file, sizeof(file), custom);
+        snprintf(file, sizeof(file), "%s", custom);
         if(!wox_keymap_load(file))
         {
             printf("ERROR: could not load keymap: %s\n", file);
