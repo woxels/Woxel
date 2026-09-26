@@ -1,8 +1,9 @@
+.PHONY: all test cean
+
 all:
-	mkdir -p release
-	cc main.c -Ofast -lm -lz -lSDL2 -lGLESv2 -lEGL -o release/wox
-	strip --strip-unneeded release/wox
-	upx --lzma --best release/wox
+	cc main.c -Ofast -lm -lz -lSDL2 -lGLESv2 -lEGL -o wox
+	strip --strip-unneeded wox
+	upx --lzma --best wox
 
 test:
 	cc main.c -Ofast -lm -lz -lSDL2 -lGLESv2 -lEGL -o wox_test
@@ -10,4 +11,4 @@ test:
 	rm wox_test
 
 clean:
-	rm -r release
+	rm wox
