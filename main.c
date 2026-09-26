@@ -950,7 +950,7 @@ void drawHud(const uint type)
         a = drawText(sHud, "P ", left, top, 2);
         a = drawText(sHud, "Toggle pitch lock.", a, top, 1);
         a = drawText(sHud, " IJKL", a, top, 2);
-        drawText(sHud, "/Arrows look around.", a, top, 1);
+        drawText(sHud, "+Arrows look around.", a, top, 1);
 
         top += 22;
         a = drawText(sHud, "Left Click ", left, top, 2);
