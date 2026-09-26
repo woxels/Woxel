@@ -68,14 +68,16 @@ Woxel uses intuitive controls akin to Minetest and Minecraft, while providing a 
 * Same adoption: you can save and export it as a normal project afterwards.
 
 ### 📂 Export as mesh or voxels
-* `./wox export <project_or_file> <[OPTIONAL]format: wox,txt,vv,ply,b64> <export_path>`
+* `./wox export <project_or_file> <[OPTIONAL]format> <[OPTIONAL]ply_mode> <export_path>`
+* Formats: `wox`, `txt`, `vv`, `ply`, `b64`
+* PLY modes: `greedy` (merged same-color quads, default), `quads` (one quad per cube face), `tris` (two triangles per cube face). Greedy is always quads.
 * *e.g;* `./wox export untitled ply /home/user/file.ply`
-* *e.g;* `./wox export ./file.b64 ./file.ply`
-* *e.g;* `./wox export /home/user/file.b64 ply /home/user/file.ply`
+* *e.g;* `./wox export untitled ply greedy /home/user/file.ply`
+* *e.g;* `./wox export untitled ply quads /home/user/file.ply`
+* *e.g;* `./wox export untitled ply tris /home/user/file.ply`
+* *e.g;* `./wox export ./file.b64 greedy ./file.ply`
 * *e.g;* `./wox export ~/file.wox.gz txt ./file.txt`
 * Source can be a saved project name, a `.b64` file, or a `.wox.gz` file. Format can be omitted when the output path ends in `.ply`, `.txt`, `.vv`, `.b64`, or `.wox.gz`.
-
-PLY export uses greedy meshing: coplanar same-color faces become quads.
 
 ## Compile
 Run `make` or `make test` or `cc main.c -Ofast -lm -lz -lSDL2 -lGLESv2 -lEGL -o wox`

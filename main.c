@@ -1662,13 +1662,27 @@ static int wox_parse_format(const char* s)
     if(wox_ieq(s, "wox") || wox_ieq(s, "gz") || wox_ieq(s, "wox.gz")){return 0;}
     if(wox_ieq(s, "txt")){return 1;}
     if(wox_ieq(s, "vv")){return 2;}
-    if(wox_ieq(s, "ply")){return 3;}
+    if(wox_ieq(s, "ply") || wox_ieq(s, "greedy") || wox_ieq(s, "quads") ||
+       wox_ieq(s, "quad") || wox_ieq(s, "tris") || wox_ieq(s, "tri") ||
+       wox_ieq(s, "triangles")){return 3;}
     if(wox_ieq(s, "b64") || wox_ieq(s, "base64")){return 4;}
     if(wox_has_ext(s, ".wox") || wox_has_ext(s, ".gz")){return 0;}
     if(wox_has_ext(s, ".txt")){return 1;}
     if(wox_has_ext(s, ".vv")){return 2;}
     if(wox_has_ext(s, ".ply")){return 3;}
     if(wox_has_ext(s, ".b64")){return 4;}
+    return -1;
+}
+
+// PLY mesh mode: 0 = greedy quads, 1 = per-face quads, 2 = per-face tris
+static int wox_parse_ply_mode(const char* s)
+{
+    if(s == NULL || s[0] == 0){return -1;}
+    if(s[0] == '.'){s++;}
+    if(wox_ieq(s, "greedy") || wox_ieq(s, "ply-greedy") || wox_ieq(s, "ply:greedy")){return 0;}
+    if(wox_ieq(s, "quads") || wox_ieq(s, "quad") || wox_ieq(s, "ply-quads") || wox_ieq(s, "ply:quads")){return 1;}
+    if(wox_ieq(s, "tris") || wox_ieq(s, "tri") || wox_ieq(s, "triangles") ||
+       wox_ieq(s, "ply-tris") || wox_ieq(s, "ply:tris")){return 2;}
     return -1;
 }
 
@@ -1803,13 +1817,16 @@ int main(int argc, char** argv)
     printf("To load Base64: ./wox loadb64 <file_path>\n");
     printf("e.g; ./wox loadb64 /home/user/file.b64\n");
     printf("Loaded files are adopted as a project (basename) so F3 / exit can save them.\n\n");
-    printf("To export: ./wox export <project_or_file> <[OPTIONAL]format: wox,txt,vv,ply,b64> <export_path>\n");
+    printf("To export: ./wox export <project_or_file> <[OPTIONAL]format> <[OPTIONAL]ply_mode> <export_path>\n");
+    printf("Formats: wox, txt, vv, ply, b64\n");
+    printf("PLY modes: greedy (merged quads, default), quads (one quad per face), tris (two triangles per face)\n");
     printf("e.g; ./wox export Untitled ply ./file.ply\n");
-    printf("e.g; ./wox export ./file.b64 ./file.ply\n");
-    printf("e.g; ./wox export /home/user/file.b64 ply /home/user/file.ply\n");
+    printf("e.g; ./wox export Untitled ply greedy ./file.ply\n");
+    printf("e.g; ./wox export Untitled ply quads ./file.ply\n");
+    printf("e.g; ./wox export Untitled ply tris ./file.ply\n");
+    printf("e.g; ./wox export ./file.b64 greedy ./file.ply\n");
     printf("e.g; ./wox export ~/file.wox.gz txt ./file.txt\n");
-    printf("Format is optional if the output path ends in .ply/.txt/.vv/.b64/.wox.gz\n");
-    printf("PLY export uses greedy meshing: coplanar same-color faces become quads.\n\n");
+    printf("Format is optional if the output path ends in .ply/.txt/.vv/.b64/.wox.gz\n\n");
     printf("Find more color palettes at; https://lospec.com/palette-list\n");
     printf("You can use any palette upto 32 colors. But don't use #000000 (Black)\nin your color palette as it will terminate at that color.\n\n");
     printf("Default 32 Color Palette: https://lospec.com/palette-list/resurrect-32\n");
@@ -1828,6 +1845,7 @@ int main(int argc, char** argv)
     char source_path[1024] = {0};
     char resolved_src[1024] = {0};
     uint export_type = 0;
+    uint ply_mode = 0; // 0 greedy quads, 1 per-face quads, 2 per-face tris
     uint adopt_title = 0;
     uint loaded_ok = 0;
     if(argc >= 2 && strlen(argv[1]) < 256)
@@ -1848,22 +1866,44 @@ int main(int argc, char** argv)
     {
         if(argc < 4)
         {
-            printf("ERROR: usage: ./wox export <project_or_file> [wox|txt|vv|ply|b64] <export_path>\n");
+            printf("ERROR: usage: ./wox export <project_or_file> [wox|txt|vv|ply|b64] [greedy|quads|tris] <export_path>\n");
             printf("       ./wox export ./scene.b64 ./scene.ply\n");
+            printf("       ./wox export ./scene.b64 ply quads ./scene.ply\n");
             return 1;
         }
         wox_expand_path(source_path, sizeof(source_path), argv[2]);
-        if(argc >= 5)
+        if(argc >= 6)
         {
             int fmt = wox_parse_format(argv[3]);
-            wox_expand_path(export_path, sizeof(export_path), argv[4]);
-            if(fmt < 0){fmt = wox_parse_format(argv[4]);}
+            const int mode = wox_parse_ply_mode(argv[4]);
+            wox_expand_path(export_path, sizeof(export_path), argv[5]);
+            if(fmt < 0){fmt = wox_parse_format(argv[5]);}
             if(fmt < 0)
             {
                 printf("ERROR: unknown export format '%s' (use wox, txt, vv, ply, or b64)\n", argv[3]);
                 return 1;
             }
             export_type = (uint)fmt;
+            if(export_type == 3 && mode >= 0){ply_mode = (uint)mode;}
+            else if(export_type == 3)
+            {
+                const int m2 = wox_parse_ply_mode(argv[3]);
+                if(m2 >= 0){ply_mode = (uint)m2;}
+            }
+        }
+        else if(argc >= 5)
+        {
+            int fmt = wox_parse_format(argv[3]);
+            const int mode = wox_parse_ply_mode(argv[3]);
+            wox_expand_path(export_path, sizeof(export_path), argv[4]);
+            if(fmt < 0){fmt = wox_parse_format(argv[4]);}
+            if(fmt < 0)
+            {
+                printf("ERROR: unknown export format '%s' (use wox, txt, vv, ply, greedy, quads, tris, or b64)\n", argv[3]);
+                return 1;
+            }
+            export_type = (uint)fmt;
+            if(export_type == 3 && mode >= 0){ply_mode = (uint)mode;}
         }
         else
         {
@@ -2068,12 +2108,21 @@ int main(int argc, char** argv)
             FILE* f = fopen(export_path, "w");
             if(f != NULL)
             {
-                const uint faces = ply_greedy_mesh(NULL, 0);
-                const uint vc = faces * 4;
+                const int greedy = (ply_mode == 0);
+                const int tris = (ply_mode == 2);
+                const uint nquad = greedy ? ply_greedy_mesh(NULL, 0) : ply_cube_mesh(NULL, 0);
+                const uint vc = nquad * 4;
+                const uint nface = tris ? (nquad * 2) : nquad;
+                const char* mode_name = greedy ? "greedy" : (tris ? "tris" : "quads");
                 fprintf(f, "ply\n");
                 fprintf(f, "format ascii 1.0\n");
                 fprintf(f, "comment Created by %s %s - woxels.github.io\n", appTitle, appVersion);
-                fprintf(f, "comment greedy-meshed quads, same-color faces merged\n");
+                if(greedy)
+                    fprintf(f, "comment greedy-meshed quads, same-color faces merged\n");
+                else if(tris)
+                    fprintf(f, "comment per-voxel-face triangles (two tris per cube face)\n");
+                else
+                    fprintf(f, "comment per-voxel-face quads\n");
                 fprintf(f, "element vertex %u\n", vc);
                 fprintf(f, "property float x\n");
                 fprintf(f, "property float y\n");
@@ -2084,22 +2133,32 @@ int main(int argc, char** argv)
                 fprintf(f, "property uchar red\n");
                 fprintf(f, "property uchar green\n");
                 fprintf(f, "property uchar blue\n");
-                fprintf(f, "element face %u\n", faces);
+                fprintf(f, "element face %u\n", nface);
                 fprintf(f, "property list uchar uint vertex_indices\n");
                 fprintf(f, "end_header\n");
-                ply_greedy_mesh(f, 1);
-                for(uint i = 0, t = 0; i < faces; i++)
+                if(greedy){ply_greedy_mesh(f, 1);}
+                else{ply_cube_mesh(f, 1);}
+                for(uint i = 0, t = 0; i < nquad; i++)
                 {
                     const uint i0 = t++;
                     const uint i1 = t++;
                     const uint i2 = t++;
                     const uint i3 = t++;
-                    fprintf(f, "4 %u %u %u %u\n", i0, i1, i2, i3);
+                    if(tris)
+                    {
+                        fprintf(f, "3 %u %u %u\n", i0, i2, i3);
+                        fprintf(f, "3 %u %u %u\n", i0, i1, i2);
+                    }
+                    else
+                        fprintf(f, "4 %u %u %u %u\n", i0, i1, i2, i3);
                 }
                 fclose(f);
                 char tmp[16];
                 timestamp(tmp);
-                printf("[%s] Exported PLY: %s (%u quads)\n", tmp, export_path, faces);
+                if(tris)
+                    printf("[%s] Exported PLY: %s (%s, %u tris)\n", tmp, export_path, mode_name, nface);
+                else
+                    printf("[%s] Exported PLY: %s (%s, %u quads)\n", tmp, export_path, mode_name, nquad);
             }
         }
         return 0;
