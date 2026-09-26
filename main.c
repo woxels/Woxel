@@ -7,7 +7,7 @@
     C & SDL / OpenGL ES2 / GLSL ES
     Colour Converter: https://www.easyrgb.com
 */
-#include "inc/excess.h"
+#include "excess.h"
 #include <string.h>
 #include <stdlib.h>
 #include <sys/stat.h>
@@ -49,327 +49,6 @@ static SDL_HitTestResult SDLCALL hitTest(SDL_Window *window, const SDL_Point *pt
     return SDL_HITTEST_NORMAL;
 }
 void drawHud(uint type);
-
-//*************************************
-// Base64 import / export (CLI: loadb64 / export b64)
-// Web version gzip/zlib-compresses game_state then Base64-encodes it
-// so the scene can be copied, shared, and pasted back.
-//*************************************
-static const char b64_alphabet[] =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-static const unsigned char b64_dtable[256] = {
-    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
-    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
-    255,255,255,255,255,255,255,255,255,255,255, 62,255, 62,255, 63,
-     52, 53, 54, 55, 56, 57, 58, 59, 60, 61,255,255,255,  0,255,255,
-    255,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
-     15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,255,255,255,255,255,
-    255, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-     41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,255,255,255,255,255,
-    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
-    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
-    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
-    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
-    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
-    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
-    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
-    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255
-};
-
-static char* b64_encode(const unsigned char* src, size_t len, size_t* out_len)
-{
-    const size_t olen = 4 * ((len + 2) / 3);
-    char* out = (char*)malloc(olen + 1);
-    if(!out) return NULL;
-
-    size_t i = 0, j = 0;
-    const size_t n3 = len - (len % 3);
-    while(i < n3)
-    {
-        const unsigned int n = ((unsigned int)src[i] << 16) |
-                               ((unsigned int)src[i+1] << 8) |
-                               (unsigned int)src[i+2];
-        out[j++] = b64_alphabet[(n >> 18) & 63];
-        out[j++] = b64_alphabet[(n >> 12) & 63];
-        out[j++] = b64_alphabet[(n >> 6) & 63];
-        out[j++] = b64_alphabet[n & 63];
-        i += 3;
-    }
-    if(i < len)
-    {
-        unsigned int n = ((unsigned int)src[i] << 16);
-        out[j++] = b64_alphabet[(n >> 18) & 63];
-        if(i + 1 < len)
-        {
-            n |= ((unsigned int)src[i+1] << 8);
-            out[j++] = b64_alphabet[(n >> 12) & 63];
-            out[j++] = b64_alphabet[(n >> 6) & 63];
-            out[j++] = '=';
-        }
-        else
-        {
-            out[j++] = b64_alphabet[(n >> 12) & 63];
-            out[j++] = '=';
-            out[j++] = '=';
-        }
-    }
-    out[j] = 0;
-    if(out_len) *out_len = j;
-    return out;
-}
-
-static unsigned char* b64_decode(const char* src, size_t len, size_t* out_len)
-{
-    while(len && (src[len-1]=='\n' || src[len-1]=='\r' ||
-                  src[len-1]==' '  || src[len-1]=='\t'))
-        len--;
-    if(len == 0 || (len & 3)) return NULL;
-
-    size_t pads = 0;
-    if(src[len-1] == '=') pads++;
-    if(src[len-2] == '=') pads++;
-
-    const size_t olen = (len / 4) * 3 - pads;
-    unsigned char* out = (unsigned char*)malloc(olen + 1);
-    if(!out) return NULL;
-
-    const unsigned char* s = (const unsigned char*)src;
-    unsigned char* o = out;
-    const unsigned char* end = s + len - (pads ? 4 : 0);
-    while(s < end)
-    {
-        const unsigned int a = b64_dtable[s[0]];
-        const unsigned int b = b64_dtable[s[1]];
-        const unsigned int c = b64_dtable[s[2]];
-        const unsigned int d = b64_dtable[s[3]];
-        if((a | b | c | d) == 255){ free(out); return NULL; }
-        const unsigned int t = (a << 18) | (b << 12) | (c << 6) | d;
-        o[0] = (unsigned char)(t >> 16);
-        o[1] = (unsigned char)(t >> 8);
-        o[2] = (unsigned char)t;
-        s += 4;
-        o += 3;
-    }
-    if(pads)
-    {
-        const unsigned int a = b64_dtable[s[0]];
-        const unsigned int b = b64_dtable[s[1]];
-        const unsigned int c = (s[2] == '=') ? 0 : b64_dtable[s[2]];
-        const unsigned int d = (s[3] == '=') ? 0 : b64_dtable[s[3]];
-        if((a | b | c | d) == 255){ free(out); return NULL; }
-        const unsigned int t = (a << 18) | (b << 12) | (c << 6) | d;
-        *o++ = (unsigned char)(t >> 16);
-        if(pads < 2) *o++ = (unsigned char)(t >> 8);
-    }
-    if(out_len) *out_len = olen;
-    return out;
-}
-
-static int b64_is_filepath(const char* s)
-{
-    if(s == NULL || s[0] == 0){return 0;}
-    if(s[0] == '/' || s[0] == '.' || s[0] == '~'){return 1;}
-    if(strchr(s, '/') != NULL || strchr(s, '\\') != NULL){return 1;}
-#ifdef _WIN32
-    if(s[0] != 0 && s[1] == ':'){return 1;}
-#endif
-    return 0;
-}
-
-static void b64_mkdirs(const char* path)
-{
-    char buf[1024];
-    snprintf(buf, sizeof(buf), "%s", path);
-    for(char* p = buf + 1; *p; p++)
-    {
-        if(*p == '/' || *p == '\\')
-        {
-            *p = 0;
-            mkdir(buf, 0755);
-            *p = '/';
-        }
-    }
-}
-
-static void b64_resolve_path(char* out, size_t outsz, const char* path)
-{
-    if(path != NULL && path[0] != 0)
-    {
-        snprintf(out, outsz, "%s", path);
-        return;
-    }
-    if(b64_is_filepath(openTitle))
-    {
-        snprintf(out, outsz, "%s", openTitle);
-        return;
-    }
-    snprintf(out, outsz, "%s%s", appdir ? appdir : "", openTitle);
-}
-
-uint saveBase64(const char* path)
-{
-    char file[1024];
-    b64_resolve_path(file, sizeof(file), path);
-
-    uLongf zlen = compressBound(sizeof(game_state));
-    unsigned char* zbuf = (unsigned char*)malloc(zlen);
-    if(zbuf == NULL)
-    {
-        printf("ERROR: saveBase64() out of memory.\n");
-        return 0;
-    }
-    const int zr = compress2(zbuf, &zlen, (const Bytef*)&g, sizeof(game_state), 9);
-    if(zr != Z_OK)
-    {
-        free(zbuf);
-        printf("ERROR: saveBase64() compression failed (%d).\n", zr);
-        return 0;
-    }
-
-    size_t blen = 0;
-    char* b64 = b64_encode(zbuf, zlen, &blen);
-    free(zbuf);
-    if(b64 == NULL)
-    {
-        printf("ERROR: saveBase64() encode failed.\n");
-        return 0;
-    }
-
-    b64_mkdirs(file);
-    FILE* f = fopen(file, "w");
-    if(f == NULL)
-    {
-        free(b64);
-        printf("ERROR: saveBase64() could not write: %s\n", file);
-        return 0;
-    }
-    fwrite(b64, 1, blen, f);
-    fputc('\n', f);
-    fclose(f);
-    free(b64);
-
-    char tmp[16];
-    timestamp(tmp);
-    printf("[%s] Exported Base64: %s (%u voxels)\n", tmp, file, placedVoxels());
-    snprintf(warnm, sizeof(warnm), "Exported Base64");
-    wti = t + 2.f;
-    return 1;
-}
-
-uint loadBase64(const char* path)
-{
-    char file[1024];
-    b64_resolve_path(file, sizeof(file), path);
-
-    FILE* f = fopen(file, "rb");
-    if(f == NULL)
-    {
-        const size_t n = strlen(file);
-        if(n < 4 || (strcmp(file + n - 4, ".b64") != 0 && strcmp(file + n - 4, ".B64") != 0))
-        {
-            char alt[1024];
-            snprintf(alt, sizeof(alt), "%s.b64", file);
-            f = fopen(alt, "rb");
-            if(f != NULL){snprintf(file, sizeof(file), "%s", alt);}
-        }
-    }
-    if(f == NULL)
-    {
-        printf("ERROR: loadBase64() could not open: %s\n", file);
-        snprintf(warnm, sizeof(warnm), "Invalid Base64 data");
-        wti = t + 2.f;
-        return 0;
-    }
-    fseek(f, 0, SEEK_END);
-    const long flen = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    if(flen <= 0)
-    {
-        fclose(f);
-        printf("ERROR: loadBase64() empty file: %s\n", file);
-        snprintf(warnm, sizeof(warnm), "Invalid Base64 data");
-        wti = t + 2.f;
-        return 0;
-    }
-    char* raw = (char*)malloc((size_t)flen + 1);
-    if(raw == NULL){fclose(f); return 0;}
-    const size_t nread = fread(raw, 1, (size_t)flen, f);
-    fclose(f);
-    raw[nread] = 0;
-
-    size_t slen = 0;
-    char* stripped = (char*)malloc(nread + 1);
-    if(stripped == NULL){free(raw); return 0;}
-    for(size_t i = 0; i < nread; i++)
-    {
-        const unsigned char c = (unsigned char)raw[i];
-        if(c == ' ' || c == '\n' || c == '\r' || c == '\t'){continue;}
-        stripped[slen++] = (char)c;
-    }
-    stripped[slen] = 0;
-    free(raw);
-
-    size_t zlen = 0;
-    unsigned char* zbuf = b64_decode(stripped, slen, &zlen);
-    free(stripped);
-    if(zbuf == NULL || zlen == 0)
-    {
-        printf("ERROR: loadBase64() invalid Base64 data.\n");
-        snprintf(warnm, sizeof(warnm), "Invalid Base64 data");
-        wti = t + 2.f;
-        if(zbuf){free(zbuf);}
-        return 0;
-    }
-
-    game_state ng;
-    memset(&ng, 0, sizeof(ng));
-    uLongf dlen = sizeof(game_state);
-    int zr = uncompress((Bytef*)&ng, &dlen, zbuf, zlen);
-    if(zr != Z_OK)
-    {
-        z_stream strm;
-        memset(&strm, 0, sizeof(strm));
-        strm.next_in = zbuf;
-        strm.avail_in = (uInt)zlen;
-        strm.next_out = (Bytef*)&ng;
-        strm.avail_out = (uInt)sizeof(game_state);
-        if(inflateInit2(&strm, 32 + MAX_WBITS) == Z_OK)
-        {
-            const int ir = inflate(&strm, Z_FINISH);
-            dlen = strm.total_out;
-            inflateEnd(&strm);
-            zr = (ir == Z_STREAM_END) ? Z_OK : ir;
-        }
-    }
-    if(zr != Z_OK && zlen == sizeof(game_state))
-    {
-        memcpy(&ng, zbuf, sizeof(game_state));
-        dlen = sizeof(game_state);
-        zr = Z_OK;
-    }
-    free(zbuf);
-    if(zr != Z_OK || dlen != sizeof(game_state))
-    {
-        printf("ERROR: loadBase64() decompression failed (%d).\n", zr);
-        snprintf(warnm, sizeof(warnm), "Decompression failed - corrupted data");
-        wti = t + 2.f;
-        return 0;
-    }
-
-    memcpy(&g, &ng, sizeof(game_state));
-    pal_clamp_st();
-    fks = (g.ms == g.cms);
-    has_changed = 1;
-    if(sHud != NULL){updateSelectColor();}
-
-    char tmp[16];
-    timestamp(tmp);
-    printf("[%s] Imported Base64: %s (%u voxels)\n", tmp, file, placedVoxels());
-    snprintf(warnm, sizeof(warnm), "Imported Base64");
-    wti = t + 2.f;
-    return 1;
-}
 
 void main_loop()
 {
@@ -532,7 +211,7 @@ void main_loop()
                     {
                         g.voxels[lray] = (uchar)pal_prev((float)g.voxels[lray]);
                         g.st = (float)g.voxels[lray];
-                        has_changed = 1;
+                        mark_dirty_index(lray);
                         updateSelectColor();
                     }
                     else
@@ -548,7 +227,7 @@ void main_loop()
                     {
                         g.voxels[lray] = (uchar)pal_next((float)g.voxels[lray]);
                         g.st = (float)g.voxels[lray];
-                        has_changed = 1;
+                        mark_dirty_index(lray);
                         updateSelectColor();
                     }
                     else
@@ -565,13 +244,7 @@ void main_loop()
                     {
                         if(g.pb.w == 1 && isInBounds(g.pb) && g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] == 0)
                         {
-                            g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = pal_voxel();
-                            if(mirror == 1)
-                            {
-                                const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
-                                g.voxels[PTI(x, g.pb.y, g.pb.z)] = pal_voxel();
-                            }
-                            has_changed = 1;
+                            voxel_set_brush(g.pb.x, g.pb.y, g.pb.z, pal_voxel());
                         }
                     }
                 }
@@ -581,13 +254,7 @@ void main_loop()
                     traceViewPath(0);
                     if(lray > -1)
                     {
-                        g.voxels[lray] = 0;
-                        if(mirror == 1)
-                        {
-                            const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
-                            g.voxels[PTI(x, ghp.y, ghp.z)] = 0;
-                        }
-                        has_changed = 1;
+                        voxel_set_brush(ghp.x, ghp.y, ghp.z, 0);
                     }
                 }
                 else if(event.key.keysym.sym == SDLK_q || event.key.keysym.sym == SDLK_z) // clone pointed voxel color
@@ -609,13 +276,7 @@ void main_loop()
                     traceViewPath(0);
                     if(lray > -1)
                     {
-                        g.voxels[lray] = pal_voxel();
-                        if(mirror == 1)
-                        {
-                            const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
-                            g.voxels[PTI(x, ghp.y, ghp.z)] = pal_voxel();
-                        }
-                        has_changed = 1;
+                        voxel_set_brush(ghp.x, ghp.y, ghp.z, pal_voxel());
                     }
                 }
                 else if(event.key.keysym.sym == SDLK_r) // toggle mirror brush
@@ -632,8 +293,7 @@ void main_loop()
                     const vec rp = (vec){roundf(p.x), roundf(p.y), roundf(p.z)};
                     if(isInBounds(rp) == 1)
                     {
-                        g.voxels[PTI(rp.x, rp.y, rp.z)] = 8;
-                        has_changed = 1;
+                        voxel_set(rp.x, rp.y, rp.z, 8);
                     }
                 }
                 else if(event.key.keysym.sym == SDLK_f) // toggle movement speeds
@@ -691,7 +351,7 @@ void main_loop()
                 else if(event.key.keysym.sym == SDLK_F8)
                 {
                     loadState(openTitle, 0);
-					has_changed = 1;
+                    mark_dirty_full();
                 }
                 else if(event.key.keysym.sym == SDLK_p)
                 {
@@ -876,13 +536,7 @@ void main_loop()
                     {
                         if(g.pb.w == 1 && isInBounds(g.pb) && g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] == 0)
                         {
-                            g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = pal_voxel();
-                            if(mirror == 1)
-                            {
-                                const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
-                                g.voxels[PTI(x, g.pb.y, g.pb.z)] = pal_voxel();
-                            }
-                            has_changed = 1;
+                            voxel_set_brush(g.pb.x, g.pb.y, g.pb.z, pal_voxel());
                         }
                     }
                 }
@@ -892,13 +546,7 @@ void main_loop()
                     traceViewPath(0);
                     if(lray > -1)
                     {
-                        g.voxels[lray] = 0;
-                        if(mirror == 1)
-                        {
-                            const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
-                            g.voxels[PTI(x, ghp.y, ghp.z)] = 0;
-                        }
-                        has_changed = 1;
+                        voxel_set_brush(ghp.x, ghp.y, ghp.z, 0);
                     }
                 }
                 else if(event.button.button == SDL_BUTTON_MIDDLE || event.button.button == SDL_BUTTON_X1) // clone pointed voxel
@@ -920,13 +568,7 @@ void main_loop()
                     traceViewPath(0);
                     if(lray > -1)
                     {
-                        g.voxels[lray] = pal_voxel();
-                        if(mirror == 1)
-                        {
-                            const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
-                            g.voxels[PTI(x, ghp.y, ghp.z)] = pal_voxel();
-                        }
-                        has_changed = 1;
+                        voxel_set_brush(ghp.x, ghp.y, ghp.z, pal_voxel());
                     }
                 }
                 idle = t;
@@ -959,13 +601,7 @@ void main_loop()
             {
                 if(g.pb.w == 1 && isInBounds(g.pb) && g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] == 0)
                 {
-                    g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] = pal_voxel();
-                    if(mirror == 1)
-                    {
-                        const float x = g.pb.x > 64.f ? 64.f+(64.f-g.pb.x) : 64.f + (64.f-g.pb.x);
-                        g.voxels[PTI(x, g.pb.y, g.pb.z)] = pal_voxel();
-                    }
-                    has_changed = 1;
+                    voxel_set_brush(g.pb.x, g.pb.y, g.pb.z, pal_voxel());
                 }
             }
             ptt = t+0.1;
@@ -976,13 +612,7 @@ void main_loop()
             traceViewPath(0);
             if(lray > -1)
             {
-                g.voxels[lray] = 0;
-                if(mirror == 1)
-                {
-                    const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
-                    g.voxels[PTI(x, ghp.y, ghp.z)] = 0;
-                }
-                has_changed = 1;
+                voxel_set_brush(ghp.x, ghp.y, ghp.z, 0);
             }
             dtt = t+0.1f;
         }
@@ -992,13 +622,7 @@ void main_loop()
             traceViewPath(0);
             if(lray > -1)
             {
-                g.voxels[lray] = pal_voxel();
-                if(mirror == 1)
-                {
-                    const float x = ghp.x > 64.f ? 64.f+(64.f-ghp.x) : 64.f + (64.f-ghp.x);
-                    g.voxels[PTI(x, ghp.y, ghp.z)] = pal_voxel();
-                }
-                has_changed = 1;
+                voxel_set_brush(ghp.x, ghp.y, ghp.z, pal_voxel());
             }
         }
 
@@ -1122,8 +746,8 @@ void main_loop()
     }
 
     mIdent(&view);
-    mRotate(&view, g.yrot, 1.f, 0.f, 0.f);
-    mRotate(&view, g.xrot, 0.f, 0.f, 1.f);
+    mSetRotY(&view, g.yrot);
+    mRotZ(&view, g.xrot);
 
     mGetViewZ(&look_dir, view); // refresh
 
@@ -1153,19 +777,31 @@ void main_loop()
     // has changed?
     if(has_changed == 1)
     {
-        // update voxels
-        for (int x = 0; x < 1024; x++)
-        for (int y = 0; y < 2048; y++) {
-            int index = (x * 2048) + y;
-            if (g.voxels[index] < 1) {
-            setpixel(sVoxel, x, y, 0x00000000);
-            } else {
+        // update dirty voxels only
+        int x0=0,y0=0,z0=0,x1=127,y1=127,z1=127;
+        if(dirty_mode == 1)
+        {
+            x0 = dirty_x0; y0 = dirty_y0; z0 = dirty_z0;
+            x1 = dirty_x1; y1 = dirty_y1; z1 = dirty_z1;
+        }
+        for(int z = z0; z <= z1; z++)
+        for(int y = y0; y <= y1; y++)
+        for(int x = x0; x <= x1; x++)
+        {
+            const int index = PTI((uchar)x,(uchar)y,(uchar)z);
+            const int tx = index / 2048;
+            const int ty = index % 2048;
+            if(g.voxels[index] < 1)
+                setpixel(sVoxel, tx, ty, 0x00000000);
+            else
+            {
                 uint32_t color = g.colors[g.voxels[index]-1];
                 color = (color >> 16) | (((color >> 8) & 0xFF) << 8) | ((color & 0xFF) << 16) | (0xFF << 24);
-                setpixel(sVoxel, x, y, color);
+                setpixel(sVoxel, tx, ty, color);
             }
         }
         voxelmap = esReLoadTextureA(1024, 2048, sVoxel->pixels, 0);
+        dirty_mode = 0;
 
         // bind the new texture
         glActiveTexture(GL_TEXTURE0);
@@ -1539,186 +1175,6 @@ void drawHud(const uint type)
 }
 
 //*************************************
-// CLI source helpers (project name vs file path)
-//*************************************
-static int wox_has_ext(const char* path, const char* ext)
-{
-    const size_t n = strlen(path);
-    const size_t e = strlen(ext);
-    if(n < e){return 0;}
-    const char* a = path + (n - e);
-    for(size_t i = 0; i < e; i++)
-    {
-        const unsigned char ca = (unsigned char)a[i];
-        const unsigned char cb = (unsigned char)ext[i];
-        const char la = (ca >= 'A' && ca <= 'Z') ? (char)(ca + 32) : (char)ca;
-        const char lb = (cb >= 'A' && cb <= 'Z') ? (char)(cb + 32) : (char)cb;
-        if(la != lb){return 0;}
-    }
-    return 1;
-}
-
-static int wox_ieq(const char* a, const char* b)
-{
-    if(a == NULL || b == NULL){return 0;}
-    while(*a && *b)
-    {
-        unsigned char ca = (unsigned char)*a++, cb = (unsigned char)*b++;
-        if(ca >= 'A' && ca <= 'Z'){ca = (unsigned char)(ca + 32);}
-        if(cb >= 'A' && cb <= 'Z'){cb = (unsigned char)(cb + 32);}
-        if(ca != cb){return 0;}
-    }
-    return *a == 0 && *b == 0;
-}
-
-static void wox_expand_path(char* out, size_t outsz, const char* path)
-{
-    if(path == NULL){out[0] = 0; return;}
-    if(path[0] == '~' && (path[1] == '/' || path[1] == '\\' || path[1] == 0))
-    {
-        const char* home = getenv("HOME");
-        if(home != NULL && home[0] != 0)
-        {
-            snprintf(out, outsz, "%s%s", home, path + 1);
-            return;
-        }
-    }
-    snprintf(out, outsz, "%s", path);
-}
-
-static int wox_file_exists(const char* path)
-{
-    FILE* f = fopen(path, "rb");
-    if(f == NULL){return 0;}
-    fclose(f);
-    return 1;
-}
-
-static int wox_file_is_gzip(const char* path)
-{
-    FILE* f = fopen(path, "rb");
-    if(f == NULL){return 0;}
-    unsigned char m[2] = {0, 0};
-    const size_t n = fread(m, 1, 2, f);
-    fclose(f);
-    return n == 2 && m[0] == 0x1f && m[1] == 0x8b;
-}
-
-static int wox_parse_format(const char* s)
-{
-    if(s == NULL || s[0] == 0){return -1;}
-    if(s[0] == '.'){s++;}
-    if(wox_ieq(s, "wox") || wox_ieq(s, "gz") || wox_ieq(s, "wox.gz")){return 0;}
-    if(wox_ieq(s, "txt")){return 1;}
-    if(wox_ieq(s, "vv")){return 2;}
-    if(wox_ieq(s, "ply") || wox_ieq(s, "greedy") || wox_ieq(s, "quads") ||
-       wox_ieq(s, "quad") || wox_ieq(s, "tris") || wox_ieq(s, "tri") ||
-       wox_ieq(s, "triangles")){return 3;}
-    if(wox_ieq(s, "b64") || wox_ieq(s, "base64")){return 4;}
-    if(wox_has_ext(s, ".wox") || wox_has_ext(s, ".gz")){return 0;}
-    if(wox_has_ext(s, ".txt")){return 1;}
-    if(wox_has_ext(s, ".vv")){return 2;}
-    if(wox_has_ext(s, ".ply")){return 3;}
-    if(wox_has_ext(s, ".b64")){return 4;}
-    return -1;
-}
-
-// PLY mesh mode: 0 = greedy quads, 1 = per-face quads, 2 = per-face tris
-static int wox_parse_ply_mode(const char* s)
-{
-    if(s == NULL || s[0] == 0){return -1;}
-    if(s[0] == '.'){s++;}
-    if(wox_ieq(s, "greedy") || wox_ieq(s, "ply-greedy") || wox_ieq(s, "ply:greedy")){return 0;}
-    if(wox_ieq(s, "quads") || wox_ieq(s, "quad") || wox_ieq(s, "ply-quads") || wox_ieq(s, "ply:quads")){return 1;}
-    if(wox_ieq(s, "tris") || wox_ieq(s, "tri") || wox_ieq(s, "triangles") ||
-       wox_ieq(s, "ply-tris") || wox_ieq(s, "ply:tris")){return 2;}
-    return -1;
-}
-
-static void wox_title_from_path(char* out, size_t outsz, const char* path)
-{
-    const char* base = path;
-    for(const char* p = path; *p; p++)
-        if(*p == '/' || *p == '\\'){base = p + 1;}
-    snprintf(out, outsz, "%s", (base[0] != 0) ? base : "Untitled");
-    char* dot = strrchr(out, '.');
-    if(dot != NULL && wox_has_ext(dot, ".gz"))
-    {
-        *dot = 0;
-        char* dot2 = strrchr(out, '.');
-        if(dot2 != NULL && wox_has_ext(dot2, ".wox")){*dot2 = 0;}
-    }
-    else if(dot != NULL && (wox_has_ext(dot, ".b64") || wox_has_ext(dot, ".wox")))
-        *dot = 0;
-    if(out[0] == 0){snprintf(out, outsz, "Untitled");}
-}
-
-// Try an existing file as gzip project first, then Base64.
-static uint wox_load_file(const char* path)
-{
-    if(wox_file_is_gzip(path))
-    {
-        if(loadState(path, 1)){return 1;}
-    }
-    if(loadBase64(path)){return 2;}
-    if(loadState(path, 1)){return 1;}
-    return 0;
-}
-
-// Resolve project name or file path into resolved_src. Returns 0 on failure.
-static uint wox_load_any(const char* src, char* resolved, size_t resolved_sz)
-{
-    char path[1024], alt[1024];
-    wox_expand_path(path, sizeof(path), src);
-
-    if(wox_file_exists(path))
-    {
-        snprintf(resolved, resolved_sz, "%s", path);
-        return wox_load_file(path);
-    }
-
-    snprintf(alt, sizeof(alt), "%s.b64", path);
-    if(wox_file_exists(alt))
-    {
-        snprintf(resolved, resolved_sz, "%s", alt);
-        return wox_load_file(alt);
-    }
-
-    snprintf(alt, sizeof(alt), "%s.wox.gz", path);
-    if(wox_file_exists(alt))
-    {
-        snprintf(resolved, resolved_sz, "%s", alt);
-        return wox_load_file(alt);
-    }
-
-    if(appdir != NULL)
-    {
-        snprintf(alt, sizeof(alt), "%s%s.wox.gz", appdir, path);
-        if(wox_file_exists(alt))
-        {
-            snprintf(resolved, resolved_sz, "%s", alt);
-            if(loadState(alt, 1)){return 1;}
-        }
-        snprintf(alt, sizeof(alt), "%s%s.b64", appdir, path);
-        if(wox_file_exists(alt))
-        {
-            snprintf(resolved, resolved_sz, "%s", alt);
-            return wox_load_file(alt);
-        }
-        snprintf(alt, sizeof(alt), "%s%s", appdir, path);
-        if(wox_file_exists(alt))
-        {
-            snprintf(resolved, resolved_sz, "%s", alt);
-            return wox_load_file(alt);
-        }
-    }
-
-    snprintf(resolved, resolved_sz, "%s", path);
-    if(loadState(path, 0)){return 1;}
-    return 0;
-}
-
-//*************************************
 // Process Entry Point
 //*************************************
 int main(int argc, char** argv)
@@ -1764,6 +1220,10 @@ int main(int argc, char** argv)
     printf("To load Base64: ./wox loadb64 <file_path>\n");
     printf("e.g; ./wox loadb64 /home/user/file.b64\n");
     printf("Loaded files are adopted as a project (basename) so F3 / exit can save them.\n\n");
+    printf("Wayland custom decorations: ./wox --wayland [project]\n");
+    printf("e.g; ./wox --wayland Untitled\n");
+    printf("Force native decorations: ./wox --no-wayland  (also --x11)\n");
+    printf("The flag can appear anywhere on the command line.\n\n");
     printf("To export: ./wox export <project_or_file> <[OPTIONAL]format> <[OPTIONAL]ply_mode> <export_path>\n");
     printf("Formats: wox, txt, vv, ply, b64\n");
     printf("PLY modes: greedy (merged quads, default), quads (one quad per face), tris (two triangles per face)\n");
@@ -1779,10 +1239,6 @@ int main(int argc, char** argv)
     printf("Default 32 Color Palette: https://lospec.com/palette-list/resurrect-32\n");
     printf("\n----\n");
 
-    // seed random
-    srand(time(0));
-    srandf(time(0));
-
     // get paths
     basedir = SDL_GetBasePath();
     appdir = SDL_GetPrefPath("voxdsp", "woxel");
@@ -1795,6 +1251,27 @@ int main(int argc, char** argv)
     uint ply_mode = 0; // 0 greedy quads, 1 per-face quads, 2 per-face tris
     uint adopt_title = 0;
     uint loaded_ok = 0;
+    uint wayland_cli = 0; // 0 auto, 1 force custom decor, 2 force native
+    {
+        int n = 1;
+        for(int i = 1; i < argc; i++)
+        {
+            if(wox_ieq(argv[i], "wayland") || wox_ieq(argv[i], "--wayland") ||
+               wox_ieq(argv[i], "-wayland") || wox_ieq(argv[i], "--decor"))
+            {
+                wayland_cli = 1;
+                continue;
+            }
+            if(wox_ieq(argv[i], "--no-wayland") || wox_ieq(argv[i], "--x11") ||
+               wox_ieq(argv[i], "x11") || wox_ieq(argv[i], "--native"))
+            {
+                wayland_cli = 2;
+                continue;
+            }
+            argv[n++] = argv[i];
+        }
+        argc = n;
+    }
     if(argc >= 2 && strlen(argv[1]) < 256)
     {
         sprintf(openTitle, "%s", argv[1]);
@@ -2150,7 +1627,7 @@ int main(int argc, char** argv)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-    if(isWayland() == 1)
+    if(wayland_cli == 1 || (wayland_cli == 0 && isWayland() == 1))
     {
         wayland = 1;
         wnd = SDL_CreateWindow(appTitle, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winw, winh, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_BORDERLESS);

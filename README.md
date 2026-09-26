@@ -65,6 +65,13 @@ Woxel uses intuitive controls akin to Minetest and Minecraft, while providing a 
 * *e.g;* `./wox loadgz /home/user/file.wox.gz`
 * Same adoption: you can save and export it as a normal project afterwards.
 
+### 🪟 Wayland custom window decorations
+* Auto-detected when the SDL video driver is Wayland. Force it on or off from the command line (flag can appear anywhere):
+* `./wox --wayland` / `./wox wayland` — borderless window + in-app title bar (drag, min, max, close)
+* `./wox --no-wayland` / `./wox --x11` — native window decorations
+* *e.g;* `./wox --wayland Untitled`
+* *e.g;* `./wox export Untitled ply ./out.ply --wayland` (the flag is ignored for export-only jobs)
+
 ### 📂 Export as mesh or voxels
 * `./wox export <project_or_file> <[OPTIONAL]format> <[OPTIONAL]ply_mode> <export_path>`
 * Formats: `wox`, `txt`, `vv`, `ply`, `b64`

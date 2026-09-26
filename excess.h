@@ -1,0 +1,1668 @@
+/*
+--------------------------------------------------
+    James William Fletcher (github.com/mrbid)
+         & Test_User       (notabug.org/test_user)
+            August 2023
+--------------------------------------------------
+    C & SDL / OpenGL ES2 / GLSL ES
+    Colour Converter: https://www.easyrgb.com
+*/
+
+#pragma GCC diagnostic ignored "-Wtrigraphs"
+
+#include <time.h>
+#include <string.h>
+#include <stdlib.h>
+#include <zlib.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_opengles2.h>
+
+#ifndef _WIN32
+    #include <sys/time.h>
+    #include <locale.h>
+#endif
+
+#include "esVoxel.h"
+
+#define uint GLuint
+#define sint GLint
+#define uchar unsigned char
+
+// render state id's
+GLint projection_id;
+GLint view_id;
+GLint position_id;
+GLint voxel_id;
+GLint texcoord_id;
+GLint hud_id;
+GLint look_pos_id;
+GLint scale_id;
+
+// render state matrices
+mat projection;
+mat view;
+
+//*************************************
+// globals
+//*************************************
+const char appTitle[] = "Woxel"; // or loxel?
+const char appVersion[] = "v1.6";
+char openTitle[256]="Untitled";
+char *basedir, *appdir;
+SDL_Window* wnd;
+SDL_GLContext glc;
+SDL_Surface* s_icon = NULL;
+int mx=0, my=0, xd=0, yd=0, lx=0, ly=0;
+int winw = 1024, winh = 768;
+int winw2 = 512, winh2 = 384;
+float ww, wh;
+float aspect, t = 0.f;
+uint wayland=0,maxed=0,size=0,dsx=0,dsy=0;
+uint g_fps = 0;
+uint ks[10] = {0};      // keystate
+uint focus_mouse = 0;   // mouse lock
+uint showhud = 1;       // hud visibility
+float vdist = 4096.f;   // view distance
+vec ipp;                // inverse player position
+vec look_dir;           // camera look direction
+int lray = 0;           // pointed at node index
+float ptt = 0.f;        // place timing trigger (for repeat place)
+float dtt = 0.f;        // delete timing trigger (for repeat delete)
+float rtt = 0.f;        // replace timing trigger (for repeat replace)
+float rrsp = 0.3f;      // repeat replace speed
+uint fks = 0;           // F-Key state (fast mode toggle)
+float bigc = 0.f;       // big cursor start time
+Uint32 sclr = 0;        // selected color
+uint load_state = 0;    // loaded from appdir or custom path?
+uint mirror = 0;        // mirror brush state
+vec ghp;                // global ray hit position
+uint has_changed = 1;   // do the render buffers need re-building?
+static int dirty_mode = 2; // 0 clean, 1 AABB, 2 full volume
+static int dirty_x0, dirty_y0, dirty_z0, dirty_x1, dirty_y1, dirty_z1;
+float wti = 0.f;        // warning message timer for system colors tooltip
+char warnm[256];        // warning message string
+
+float xscale, yscale;
+
+//*************************************
+// game state functions
+//*************************************
+// game data (for fast save and load)
+#define max_voxels 2097152 // 2.097 million
+typedef struct
+{
+    vec pp;     // player position
+    vec pb;     // place block pos
+    float sens; // mouse sensitivity
+    float xrot; // camera x-axis rotation
+    float yrot; // camera y-axis rotation
+    float st;   // selected color id (8..7+pal_n)
+    float ms;   // player move speed
+    float cms;  // custom move speed (high)
+    float lms;  // custom move speed (low)
+    uchar plock;// pitchlock on/off toggle
+    uchar pal_n;// user palette length (1..32), not terminated by #000000
+    uint colors[39]; // color palette (7 system, 32 user)
+    uchar voxels[max_voxels]; // x,y,z,w (w = color_id)
+}
+game_state;
+game_state g;
+// point to index & vice-versa
+uint PTI(const uchar x, const uchar y, const uchar z)
+{
+    return (z * 16384) + (y * 128) + x;
+}
+// vec ITP(const float i)
+// {
+//     const float z = i * 6.1035156E-5f; // i / 16384.f;
+//     const float a = floorf(z);
+//     const float b = (z-floorf(z)) * 128.f;
+//     const float c = (b-floorf(b)) * 128.f;
+//     return (vec){roundf(c),roundf(b),roundf(a)};
+// }
+void defaultState(const uint type)
+{
+    g.sens = 0.003f;
+    g.xrot = 0.f;
+    g.yrot = 1.57f;
+    g.pp = (vec){-64.f, 130.f, -64.f};
+    if(type == 0){g.ms = 37.2f;}
+    g.st = 8.f;
+    g.pb = (vec){0.f, 0.f, 0.f, -1.f};
+    if(type == 0){g.lms = 37.2f, g.cms = 74.4f;}
+    g.plock = 0;
+    if(g.pal_n < 1 || g.pal_n > 32){g.pal_n = 32;}
+}
+
+static uchar pal_st_max(void)
+{
+    uchar n = g.pal_n;
+    if(n < 1){n = 1;}
+    if(n > 32){n = 32;}
+    return (uchar)(7 + n);
+}
+
+static void pal_clamp_st(void)
+{
+    if(g.pal_n < 1 || g.pal_n > 32){g.pal_n = 32;}
+    if(g.st < 8.f || g.st > (float)pal_st_max()){g.st = 8.f;}
+}
+
+static float pal_prev(float st)
+{
+    pal_clamp_st();
+    const float mx = (float)pal_st_max();
+    if(st <= 8.f){return mx;}
+    return st - 1.f;
+}
+
+static float pal_next(float st)
+{
+    pal_clamp_st();
+    const float mx = (float)pal_st_max();
+    if(st >= mx){return 8.f;}
+    return st + 1.f;
+}
+
+static uchar pal_voxel(void)
+{
+    pal_clamp_st();
+    return (uchar)g.st;
+}
+
+static uint pal_color_index(void)
+{
+    pal_clamp_st();
+    return (uint)(g.st - 1.f);
+}
+uint placedVoxels()
+{
+    uint c = 0;
+    for(uint i = 0; i < max_voxels; i++)
+        if(g.voxels[i] != 0){c++;}
+    return c;
+}
+uint isInBounds(const vec p)
+{
+    if(p.x < -0.5f || p.y < -0.5f || p.z < -0.5f || p.x > 127.5f || p.y > 127.5f || p.z > 127.5f){return 0;}
+    return 1;
+}
+// uint forceInBounds(vec p)
+// {
+//     if(p.x < -0.5f){p.x = -0.5f;}
+//     if(p.y < -0.5f){p.y = -0.5f;}
+//     if(p.z < -0.5f){p.z = -0.5f;}
+//     if(p.x > 127.5f){p.x = 127.5f;}
+//     if(p.y > 127.5f){p.y = 127.5f;}
+//     if(p.z > 127.5f){p.z = 127.5f;}
+//     return 1;
+// }
+int PTIB(const int x, const int y, const int z)
+{
+    if(x < 0 || y < 0 || z < 0 || x > 127 || y > 127 || z > 127){return -1;}
+    return (z * 16384) + (y * 128) + x;
+}
+int PTIB2(const int x, const int y, const int z)
+{
+    return PTIB(x, y, z);
+}
+
+static void mark_dirty_full(void)
+{
+    dirty_mode = 2;
+    dirty_x0 = dirty_y0 = dirty_z0 = 0;
+    dirty_x1 = dirty_y1 = dirty_z1 = 127;
+    has_changed = 1;
+}
+
+static void mark_dirty_i(int x, int y, int z)
+{
+    if(x < 0 || y < 0 || z < 0 || x > 127 || y > 127 || z > 127){return;}
+    has_changed = 1;
+    if(dirty_mode == 2){return;}
+    if(dirty_mode == 0)
+    {
+        dirty_mode = 1;
+        dirty_x0 = dirty_x1 = x;
+        dirty_y0 = dirty_y1 = y;
+        dirty_z0 = dirty_z1 = z;
+        return;
+    }
+    if(x < dirty_x0){dirty_x0 = x;}
+    if(y < dirty_y0){dirty_y0 = y;}
+    if(z < dirty_z0){dirty_z0 = z;}
+    if(x > dirty_x1){dirty_x1 = x;}
+    if(y > dirty_y1){dirty_y1 = y;}
+    if(z > dirty_z1){dirty_z1 = z;}
+}
+
+static void mark_dirty_f(const float x, const float y, const float z)
+{
+    mark_dirty_i((int)x, (int)y, (int)z);
+}
+
+static void mark_dirty_index(const int i)
+{
+    if(i < 0){return;}
+    mark_dirty_i(i % 128, (i / 128) % 128, i / 16384);
+}
+
+static float mirror_x(const float x)
+{
+    return 128.f - x;
+}
+
+static int voxel_in_grid(const float x, const float y, const float z)
+{
+    return (x >= 0.f && x <= 127.f && y >= 0.f && y <= 127.f && z >= 0.f && z <= 127.f);
+}
+
+static void voxel_set(const float x, const float y, const float z, const uchar id)
+{
+    if(!voxel_in_grid(x, y, z)){return;}
+    g.voxels[PTI(x, y, z)] = id;
+    mark_dirty_f(x, y, z);
+}
+
+static void voxel_set_brush(const float x, const float y, const float z, const uchar id)
+{
+    voxel_set(x, y, z, id);
+    if(mirror){voxel_set(mirror_x(x), y, z, id);}
+}
+
+
+//*************************************
+// ray functions
+//*************************************/
+int ray(vec* hit_pos, vec* hit_vec, const vec start_pos)
+{
+    vec rd = look_dir;
+    if(fabsf(rd.x) < 1e-8f){rd.x = (rd.x < 0.f) ? -1e-8f : 1e-8f;}
+    if(fabsf(rd.y) < 1e-8f){rd.y = (rd.y < 0.f) ? -1e-8f : 1e-8f;}
+    if(fabsf(rd.z) < 1e-8f){rd.z = (rd.z < 0.f) ? -1e-8f : 1e-8f;}
+    const float idx = 1.f / rd.x, idy = 1.f / rd.y, idz = 1.f / rd.z;
+
+    vec ro = start_pos;
+    if(ro.x < -0.5f || ro.x > 127.5f || ro.y < -0.5f || ro.y > 127.5f || ro.z < -0.5f || ro.z > 127.5f)
+    {
+        const float tx1 = (-0.5f - ro.x) * idx, tx2 = (127.5f - ro.x) * idx;
+        const float ty1 = (-0.5f - ro.y) * idy, ty2 = (127.5f - ro.y) * idy;
+        const float tz1 = (-0.5f - ro.z) * idz, tz2 = (127.5f - ro.z) * idz;
+        const float tmin = fmaxf(fmaxf(fminf(tx1, tx2), fminf(ty1, ty2)), fminf(tz1, tz2));
+        const float tmax = fminf(fminf(fmaxf(tx1, tx2), fmaxf(ty1, ty2)), fmaxf(tz1, tz2));
+        if(tmax < 0.f || tmin > tmax){return -1;}
+        const float t = fmaxf(tmin, 0.f) + 1e-4f;
+        ro.x += rd.x * t;
+        ro.y += rd.y * t;
+        ro.z += rd.z * t;
+    }
+
+    int vx = (int)floorf(ro.x + 0.5f);
+    int vy = (int)floorf(ro.y + 0.5f);
+    int vz = (int)floorf(ro.z + 0.5f);
+    if((unsigned)vx > 127u || (unsigned)vy > 127u || (unsigned)vz > 127u){return -1;}
+
+    const int sx = (rd.x >= 0.f) ? 1 : -1;
+    const int sy = (rd.y >= 0.f) ? 1 : -1;
+    const int sz = (rd.z >= 0.f) ? 1 : -1;
+    const float tDeltaX = fabsf(idx), tDeltaY = fabsf(idy), tDeltaZ = fabsf(idz);
+    float tMaxX = (((float)vx + (sx > 0 ? 0.5f : -0.5f)) - ro.x) * idx;
+    float tMaxY = (((float)vy + (sy > 0 ? 0.5f : -0.5f)) - ro.y) * idy;
+    float tMaxZ = (((float)vz + (sz > 0 ? 0.5f : -0.5f)) - ro.z) * idz;
+
+    int last_axis = (fabsf(rd.x) >= fabsf(rd.y) && fabsf(rd.x) >= fabsf(rd.z)) ? 0 :
+                    (fabsf(rd.y) >= fabsf(rd.z) ? 1 : 2);
+    int last_s = last_axis == 0 ? sx : last_axis == 1 ? sy : sz;
+
+    for(;;)
+    {
+        const int vi = (int)PTI((uchar)vx, (uchar)vy, (uchar)vz);
+        if(g.voxels[vi] != 0)
+        {
+            hit_pos->x = (float)vx; hit_pos->y = (float)vy; hit_pos->z = (float)vz;
+            hit_vec->x = hit_vec->y = hit_vec->z = 0.f;
+            if(last_axis == 0){hit_vec->x = -(float)last_s;}
+            else if(last_axis == 1){hit_vec->y = -(float)last_s;}
+            else{hit_vec->z = -(float)last_s;}
+            return vi;
+        }
+
+        if(tMaxX < tMaxY && tMaxX < tMaxZ){vx += sx; tMaxX += tDeltaX; last_axis = 0; last_s = sx;}
+        else if(tMaxY < tMaxZ){vy += sy; tMaxY += tDeltaY; last_axis = 1; last_s = sy;}
+        else{vz += sz; tMaxZ += tDeltaZ; last_axis = 2; last_s = sz;}
+        if((unsigned)vx > 127u || (unsigned)vy > 127u || (unsigned)vz > 127u){return -1;}
+    }
+}
+void traceViewPath(const uint face)
+{
+    g.pb.w = -1.f;
+    vec off;
+    lray = ray(&ghp, &off, ipp);
+    if(lray < 0 || face != 1){return;}
+    g.pb = ghp;
+    g.pb.x += off.x;
+    g.pb.y += off.y;
+    g.pb.z += off.z;
+    g.pb.w = 1.f;
+}
+
+void timestamp(char* ts){const time_t tt = time(0);strftime(ts, 16, "%H:%M:%S", localtime(&tt));}
+float fTime(){return ((float)SDL_GetTicks())*0.001f;}
+#ifdef __linux__
+    uint64_t microtime()
+    {
+        struct timeval tv;
+        struct timezone tz;
+        memset(&tz, 0, sizeof(struct timezone));
+        gettimeofday(&tv, &tz);
+        return 1000000 * tv.tv_sec + tv.tv_usec;
+    }
+#endif
+void loadColors(const char* file)
+{
+    memset(g.colors, 0, 39*sizeof(uint));
+    g.colors[0] = 16448250;
+    g.colors[1] = 16711680;
+    g.colors[2] = 4194304;
+    g.colors[3] = 65280;
+    g.colors[4] = 16384;
+    g.colors[5] = 255;
+    g.colors[6] = 64;
+    FILE* f = fopen(file, "r");
+    if(f)
+    {
+        uint lino = 0;
+        char line[64];
+        while(fgets(line, sizeof(line), f) != NULL)
+        {
+            uint val;
+            if(sscanf(line, "#%x", &val) == 1 || sscanf(line, "%x", &val) == 1)
+            {
+                g.colors[7+lino] = val; // #000000 is a valid color
+                lino++;
+                if(lino > 31){break;}
+            }
+        }
+        fclose(f);
+        if(lino > 0){g.pal_n = (uchar)lino;}
+        pal_clamp_st();
+        mark_dirty_full();
+        char tmp[16];
+        timestamp(tmp);
+        printf("[%s] Custom color palette applied to project \"%s\" (%u colors).\n", tmp, openTitle, (uint)g.pal_n);
+    }
+}
+uint isWayland()
+{
+    // try this first and then actually check
+    if(strcmp(SDL_GetCurrentVideoDriver(), "wayland") == 0)
+        return 1;
+    // three tier check just to be sure
+    // we use global mouse state as it doesn't
+    // require a window to exist.
+    // as we need this check before creating a window.
+    int x1,y1,x2,y2;
+    SDL_GetGlobalMouseState(&x1, &y1);
+    //printf("a %i %i\n", x1, y1);
+    SDL_WarpMouseGlobal(x1+1, y1);
+    SDL_GetGlobalMouseState(&x2, &y2);
+    //printf("b %i %i\n", x2, y2);
+    if(x2 == x1+1){return 0;}
+    else
+    {
+        int x1,y1,x2,y2;
+        SDL_GetGlobalMouseState(&x1, &y1);
+        SDL_WarpMouseGlobal(x1, y1+1);
+        SDL_GetGlobalMouseState(&x2, &y2);
+        if(y2 == y1+1){return 0;}
+        else
+        {
+            int x1,y1,x2,y2;
+            SDL_GetGlobalMouseState(&x1, &y1);
+            SDL_WarpMouseGlobal(0,0);
+            SDL_GetGlobalMouseState(&x2, &y2);
+            if(y2 != 0 && x2 != 0){return 0;}
+            else{SDL_WarpMouseGlobal(x1, x2);}
+        }
+    }
+    return 1;
+}
+
+//*************************************
+// save and load functions
+//*************************************
+void saveState(const char* name, const char* fne, const uint fs)
+{
+#ifdef __linux__
+    setlocale(LC_NUMERIC, "");
+    const uint64_t st = microtime();
+#endif
+    char file[1024];
+    int n;
+    if(name == NULL || name[0] == 0)
+    {
+        char tmp[16];
+        timestamp(tmp);
+        printf("[%s] Save failed: empty path.\n", tmp);
+        return;
+    }
+    if(fs == 0)
+    {
+        if(appdir == NULL)
+        {
+            char tmp[16];
+            timestamp(tmp);
+            printf("[%s] Save failed: no project directory.\n", tmp);
+            return;
+        }
+        n = snprintf(file, sizeof(file), "%s%s.wox.gz%s", appdir, name, fne ? fne : "");
+    }
+    else
+        n = snprintf(file, sizeof(file), "%s", name);
+    if(n < 0 || n >= (int)sizeof(file))
+    {
+        char tmp[16];
+        timestamp(tmp);
+        printf("[%s] Save failed: path too long.\n", tmp);
+        return;
+    }
+    gzFile f = gzopen(file, "wb9hR");
+    if(f == Z_NULL)
+    {
+        char tmp[16];
+        timestamp(tmp);
+        printf("[%s] Save failed: could not write %s\n", tmp, file);
+        return;
+    }
+    const size_t ws = sizeof(game_state);
+    if(gzwrite(f, &g, ws) != (int)ws)
+    {
+        char tmp[16];
+        timestamp(tmp);
+        printf("[%s] Save corrupted: %s\n", tmp, file);
+        gzclose(f);
+        return;
+    }
+    gzclose(f);
+    char tmp[16];
+    timestamp(tmp);
+#ifndef __linux__
+    printf("[%s] Saved %u voxels to %s\n", tmp, placedVoxels(), file);
+#else
+    printf("[%s] Saved %'u voxels to %s (%'lu μs)\n", tmp, placedVoxels(), file, microtime()-st);
+#endif
+}
+uint loadState(const char* name, const uint fs)
+{
+#ifdef __linux__
+    setlocale(LC_NUMERIC, "");
+    const uint64_t st = microtime();
+#endif
+    char file[1024];
+    int n;
+    if(name == NULL || name[0] == 0){return 0;}
+    if(fs == 0)
+    {
+        if(appdir == NULL){return 0;}
+        n = snprintf(file, sizeof(file), "%s%s.wox.gz", appdir, name);
+    }
+    else
+        n = snprintf(file, sizeof(file), "%s", name);
+    if(n < 0 || n >= (int)sizeof(file)){return 0;}
+    gzFile f = gzopen(file, "rb");
+    if(f != Z_NULL)
+    {
+        int gr = gzread(f, &g, sizeof(game_state));
+        gzclose(f);
+        if(gr != (int)sizeof(game_state))
+        {
+            char tmp[16];
+            timestamp(tmp);
+            printf("[%s] Load truncated: %s (%d bytes)\n", tmp, file, gr);
+        }
+        pal_clamp_st();
+        mark_dirty_full();
+        fks = (g.ms == g.cms); // update F-Key State
+        char tmp[16];
+        timestamp(tmp);
+#ifndef __linux__
+        printf("[%s] Loaded %u voxels\n", tmp, placedVoxels());
+#else
+        printf("[%s] Loaded %'u voxels. (%'lu μs)\n", tmp, placedVoxels(), microtime()-st);
+#endif
+        return 1;
+    }
+    return 0;
+}
+
+void updateSelectColor();
+
+//*************************************
+// Base64 import / export (CLI: loadb64 / export b64)
+// Web version gzip/zlib-compresses game_state then Base64-encodes it
+// so the scene can be copied, shared, and pasted back.
+//*************************************
+static const char b64_alphabet[] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+static const unsigned char b64_dtable[256] = {
+    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+    255,255,255,255,255,255,255,255,255,255,255, 62,255, 62,255, 63,
+     52, 53, 54, 55, 56, 57, 58, 59, 60, 61,255,255,255,  0,255,255,
+    255,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
+     15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,255,255,255,255,255,
+    255, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+     41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,255,255,255,255,255,
+    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255
+};
+
+static char* b64_encode(const unsigned char* src, size_t len, size_t* out_len)
+{
+    const size_t olen = 4 * ((len + 2) / 3);
+    char* out = (char*)malloc(olen + 1);
+    if(!out) return NULL;
+
+    size_t i = 0, j = 0;
+    const size_t n3 = len - (len % 3);
+    while(i < n3)
+    {
+        const unsigned int n = ((unsigned int)src[i] << 16) |
+                               ((unsigned int)src[i+1] << 8) |
+                               (unsigned int)src[i+2];
+        out[j++] = b64_alphabet[(n >> 18) & 63];
+        out[j++] = b64_alphabet[(n >> 12) & 63];
+        out[j++] = b64_alphabet[(n >> 6) & 63];
+        out[j++] = b64_alphabet[n & 63];
+        i += 3;
+    }
+    if(i < len)
+    {
+        unsigned int n = ((unsigned int)src[i] << 16);
+        out[j++] = b64_alphabet[(n >> 18) & 63];
+        if(i + 1 < len)
+        {
+            n |= ((unsigned int)src[i+1] << 8);
+            out[j++] = b64_alphabet[(n >> 12) & 63];
+            out[j++] = b64_alphabet[(n >> 6) & 63];
+            out[j++] = '=';
+        }
+        else
+        {
+            out[j++] = b64_alphabet[(n >> 12) & 63];
+            out[j++] = '=';
+            out[j++] = '=';
+        }
+    }
+    out[j] = 0;
+    if(out_len) *out_len = j;
+    return out;
+}
+
+static unsigned char* b64_decode(const char* src, size_t len, size_t* out_len)
+{
+    while(len && (src[len-1]=='\n' || src[len-1]=='\r' ||
+                  src[len-1]==' '  || src[len-1]=='\t'))
+        len--;
+    if(len == 0 || (len & 3)) return NULL;
+
+    size_t pads = 0;
+    if(src[len-1] == '=') pads++;
+    if(src[len-2] == '=') pads++;
+
+    const size_t olen = (len / 4) * 3 - pads;
+    unsigned char* out = (unsigned char*)malloc(olen + 1);
+    if(!out) return NULL;
+
+    const unsigned char* s = (const unsigned char*)src;
+    unsigned char* o = out;
+    const unsigned char* end = s + len - (pads ? 4 : 0);
+    while(s < end)
+    {
+        const unsigned int a = b64_dtable[s[0]];
+        const unsigned int b = b64_dtable[s[1]];
+        const unsigned int c = b64_dtable[s[2]];
+        const unsigned int d = b64_dtable[s[3]];
+        if((a | b | c | d) == 255){ free(out); return NULL; }
+        const unsigned int t = (a << 18) | (b << 12) | (c << 6) | d;
+        o[0] = (unsigned char)(t >> 16);
+        o[1] = (unsigned char)(t >> 8);
+        o[2] = (unsigned char)t;
+        s += 4;
+        o += 3;
+    }
+    if(pads)
+    {
+        const unsigned int a = b64_dtable[s[0]];
+        const unsigned int b = b64_dtable[s[1]];
+        const unsigned int c = (s[2] == '=') ? 0 : b64_dtable[s[2]];
+        const unsigned int d = (s[3] == '=') ? 0 : b64_dtable[s[3]];
+        if((a | b | c | d) == 255){ free(out); return NULL; }
+        const unsigned int t = (a << 18) | (b << 12) | (c << 6) | d;
+        *o++ = (unsigned char)(t >> 16);
+        if(pads < 2) *o++ = (unsigned char)(t >> 8);
+    }
+    if(out_len) *out_len = olen;
+    return out;
+}
+
+static int b64_is_filepath(const char* s)
+{
+    if(s == NULL || s[0] == 0){return 0;}
+    if(s[0] == '/' || s[0] == '.' || s[0] == '~'){return 1;}
+    if(strchr(s, '/') != NULL || strchr(s, '\\') != NULL){return 1;}
+#ifdef _WIN32
+    if(s[0] != 0 && s[1] == ':'){return 1;}
+#endif
+    return 0;
+}
+
+static void b64_mkdirs(const char* path)
+{
+    char buf[1024];
+    snprintf(buf, sizeof(buf), "%s", path);
+    for(char* p = buf + 1; *p; p++)
+    {
+        if(*p == '/' || *p == '\\')
+        {
+            *p = 0;
+            mkdir(buf, 0755);
+            *p = '/';
+        }
+    }
+}
+
+static void b64_resolve_path(char* out, size_t outsz, const char* path)
+{
+    if(path != NULL && path[0] != 0)
+    {
+        snprintf(out, outsz, "%s", path);
+        return;
+    }
+    if(b64_is_filepath(openTitle))
+    {
+        snprintf(out, outsz, "%s", openTitle);
+        return;
+    }
+    snprintf(out, outsz, "%s%s", appdir ? appdir : "", openTitle);
+}
+
+uint saveBase64(const char* path)
+{
+    char file[1024];
+    b64_resolve_path(file, sizeof(file), path);
+
+    uLongf zlen = compressBound(sizeof(game_state));
+    unsigned char* zbuf = (unsigned char*)malloc(zlen);
+    if(zbuf == NULL)
+    {
+        printf("ERROR: saveBase64() out of memory.\n");
+        return 0;
+    }
+    const int zr = compress2(zbuf, &zlen, (const Bytef*)&g, sizeof(game_state), 9);
+    if(zr != Z_OK)
+    {
+        free(zbuf);
+        printf("ERROR: saveBase64() compression failed (%d).\n", zr);
+        return 0;
+    }
+
+    size_t blen = 0;
+    char* b64 = b64_encode(zbuf, zlen, &blen);
+    free(zbuf);
+    if(b64 == NULL)
+    {
+        printf("ERROR: saveBase64() encode failed.\n");
+        return 0;
+    }
+
+    b64_mkdirs(file);
+    FILE* f = fopen(file, "w");
+    if(f == NULL)
+    {
+        free(b64);
+        printf("ERROR: saveBase64() could not write: %s\n", file);
+        return 0;
+    }
+    fwrite(b64, 1, blen, f);
+    fputc('\n', f);
+    fclose(f);
+    free(b64);
+
+    char tmp[16];
+    timestamp(tmp);
+    printf("[%s] Exported Base64: %s (%u voxels)\n", tmp, file, placedVoxels());
+    snprintf(warnm, sizeof(warnm), "Exported Base64");
+    wti = t + 2.f;
+    return 1;
+}
+
+uint loadBase64(const char* path)
+{
+    char file[1024];
+    b64_resolve_path(file, sizeof(file), path);
+
+    FILE* f = fopen(file, "rb");
+    if(f == NULL)
+    {
+        const size_t n = strlen(file);
+        if(n < 4 || (strcmp(file + n - 4, ".b64") != 0 && strcmp(file + n - 4, ".B64") != 0))
+        {
+            char alt[1024];
+            snprintf(alt, sizeof(alt), "%s.b64", file);
+            f = fopen(alt, "rb");
+            if(f != NULL){snprintf(file, sizeof(file), "%s", alt);}
+        }
+    }
+    if(f == NULL)
+    {
+        printf("ERROR: loadBase64() could not open: %s\n", file);
+        snprintf(warnm, sizeof(warnm), "Invalid Base64 data");
+        wti = t + 2.f;
+        return 0;
+    }
+    fseek(f, 0, SEEK_END);
+    const long flen = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if(flen <= 0)
+    {
+        fclose(f);
+        printf("ERROR: loadBase64() empty file: %s\n", file);
+        snprintf(warnm, sizeof(warnm), "Invalid Base64 data");
+        wti = t + 2.f;
+        return 0;
+    }
+    char* raw = (char*)malloc((size_t)flen + 1);
+    if(raw == NULL){fclose(f); return 0;}
+    const size_t nread = fread(raw, 1, (size_t)flen, f);
+    fclose(f);
+    raw[nread] = 0;
+
+    size_t slen = 0;
+    char* stripped = (char*)malloc(nread + 1);
+    if(stripped == NULL){free(raw); return 0;}
+    for(size_t i = 0; i < nread; i++)
+    {
+        const unsigned char c = (unsigned char)raw[i];
+        if(c == ' ' || c == '\n' || c == '\r' || c == '\t'){continue;}
+        stripped[slen++] = (char)c;
+    }
+    stripped[slen] = 0;
+    free(raw);
+
+    size_t zlen = 0;
+    unsigned char* zbuf = b64_decode(stripped, slen, &zlen);
+    free(stripped);
+    if(zbuf == NULL || zlen == 0)
+    {
+        printf("ERROR: loadBase64() invalid Base64 data.\n");
+        snprintf(warnm, sizeof(warnm), "Invalid Base64 data");
+        wti = t + 2.f;
+        if(zbuf){free(zbuf);}
+        return 0;
+    }
+
+    game_state ng;
+    memset(&ng, 0, sizeof(ng));
+    uLongf dlen = sizeof(game_state);
+    int zr = uncompress((Bytef*)&ng, &dlen, zbuf, zlen);
+    if(zr != Z_OK)
+    {
+        z_stream strm;
+        memset(&strm, 0, sizeof(strm));
+        strm.next_in = zbuf;
+        strm.avail_in = (uInt)zlen;
+        strm.next_out = (Bytef*)&ng;
+        strm.avail_out = (uInt)sizeof(game_state);
+        if(inflateInit2(&strm, 32 + MAX_WBITS) == Z_OK)
+        {
+            const int ir = inflate(&strm, Z_FINISH);
+            dlen = strm.total_out;
+            inflateEnd(&strm);
+            zr = (ir == Z_STREAM_END) ? Z_OK : ir;
+        }
+    }
+    if(zr != Z_OK && zlen == sizeof(game_state))
+    {
+        memcpy(&ng, zbuf, sizeof(game_state));
+        dlen = sizeof(game_state);
+        zr = Z_OK;
+    }
+    free(zbuf);
+    if(zr != Z_OK || dlen != sizeof(game_state))
+    {
+        printf("ERROR: loadBase64() decompression failed (%d).\n", zr);
+        snprintf(warnm, sizeof(warnm), "Decompression failed - corrupted data");
+        wti = t + 2.f;
+        return 0;
+    }
+
+    memcpy(&g, &ng, sizeof(game_state));
+    pal_clamp_st();
+    fks = (g.ms == g.cms);
+    mark_dirty_full();
+    if(sHud != NULL){updateSelectColor();}
+
+    char tmp[16];
+    timestamp(tmp);
+    printf("[%s] Imported Base64: %s (%u voxels)\n", tmp, file, placedVoxels());
+    snprintf(warnm, sizeof(warnm), "Imported Base64");
+    wti = t + 2.f;
+    return 1;
+}
+
+//*************************************
+// CLI source helpers (project name vs file path)
+//*************************************
+static int wox_has_ext(const char* path, const char* ext)
+{
+    const size_t n = strlen(path);
+    const size_t e = strlen(ext);
+    if(n < e){return 0;}
+    const char* a = path + (n - e);
+    for(size_t i = 0; i < e; i++)
+    {
+        const unsigned char ca = (unsigned char)a[i];
+        const unsigned char cb = (unsigned char)ext[i];
+        const char la = (ca >= 'A' && ca <= 'Z') ? (char)(ca + 32) : (char)ca;
+        const char lb = (cb >= 'A' && cb <= 'Z') ? (char)(cb + 32) : (char)cb;
+        if(la != lb){return 0;}
+    }
+    return 1;
+}
+
+static int wox_ieq(const char* a, const char* b)
+{
+    if(a == NULL || b == NULL){return 0;}
+    while(*a && *b)
+    {
+        unsigned char ca = (unsigned char)*a++, cb = (unsigned char)*b++;
+        if(ca >= 'A' && ca <= 'Z'){ca = (unsigned char)(ca + 32);}
+        if(cb >= 'A' && cb <= 'Z'){cb = (unsigned char)(cb + 32);}
+        if(ca != cb){return 0;}
+    }
+    return *a == 0 && *b == 0;
+}
+
+static void wox_expand_path(char* out, size_t outsz, const char* path)
+{
+    if(path == NULL){out[0] = 0; return;}
+    if(path[0] == '~' && (path[1] == '/' || path[1] == '\\' || path[1] == 0))
+    {
+        const char* home = getenv("HOME");
+        if(home != NULL && home[0] != 0)
+        {
+            snprintf(out, outsz, "%s%s", home, path + 1);
+            return;
+        }
+    }
+    snprintf(out, outsz, "%s", path);
+}
+
+static int wox_file_exists(const char* path)
+{
+    FILE* f = fopen(path, "rb");
+    if(f == NULL){return 0;}
+    fclose(f);
+    return 1;
+}
+
+static int wox_file_is_gzip(const char* path)
+{
+    FILE* f = fopen(path, "rb");
+    if(f == NULL){return 0;}
+    unsigned char m[2] = {0, 0};
+    const size_t n = fread(m, 1, 2, f);
+    fclose(f);
+    return n == 2 && m[0] == 0x1f && m[1] == 0x8b;
+}
+
+static int wox_parse_format(const char* s)
+{
+    if(s == NULL || s[0] == 0){return -1;}
+    if(s[0] == '.'){s++;}
+    if(wox_ieq(s, "wox") || wox_ieq(s, "gz") || wox_ieq(s, "wox.gz")){return 0;}
+    if(wox_ieq(s, "txt")){return 1;}
+    if(wox_ieq(s, "vv")){return 2;}
+    if(wox_ieq(s, "ply") || wox_ieq(s, "greedy") || wox_ieq(s, "quads") ||
+       wox_ieq(s, "quad") || wox_ieq(s, "tris") || wox_ieq(s, "tri") ||
+       wox_ieq(s, "triangles")){return 3;}
+    if(wox_ieq(s, "b64") || wox_ieq(s, "base64")){return 4;}
+    if(wox_has_ext(s, ".wox") || wox_has_ext(s, ".gz")){return 0;}
+    if(wox_has_ext(s, ".txt")){return 1;}
+    if(wox_has_ext(s, ".vv")){return 2;}
+    if(wox_has_ext(s, ".ply")){return 3;}
+    if(wox_has_ext(s, ".b64")){return 4;}
+    return -1;
+}
+
+// PLY mesh mode: 0 = greedy quads, 1 = per-face quads, 2 = per-face tris
+static int wox_parse_ply_mode(const char* s)
+{
+    if(s == NULL || s[0] == 0){return -1;}
+    if(s[0] == '.'){s++;}
+    if(wox_ieq(s, "greedy") || wox_ieq(s, "ply-greedy") || wox_ieq(s, "ply:greedy")){return 0;}
+    if(wox_ieq(s, "quads") || wox_ieq(s, "quad") || wox_ieq(s, "ply-quads") || wox_ieq(s, "ply:quads")){return 1;}
+    if(wox_ieq(s, "tris") || wox_ieq(s, "tri") || wox_ieq(s, "triangles") ||
+       wox_ieq(s, "ply-tris") || wox_ieq(s, "ply:tris")){return 2;}
+    return -1;
+}
+
+static void wox_title_from_path(char* out, size_t outsz, const char* path)
+{
+    const char* base = path;
+    for(const char* p = path; *p; p++)
+        if(*p == '/' || *p == '\\'){base = p + 1;}
+    snprintf(out, outsz, "%s", (base[0] != 0) ? base : "Untitled");
+    char* dot = strrchr(out, '.');
+    if(dot != NULL && wox_has_ext(dot, ".gz"))
+    {
+        *dot = 0;
+        char* dot2 = strrchr(out, '.');
+        if(dot2 != NULL && wox_has_ext(dot2, ".wox")){*dot2 = 0;}
+    }
+    else if(dot != NULL && (wox_has_ext(dot, ".b64") || wox_has_ext(dot, ".wox")))
+        *dot = 0;
+    if(out[0] == 0){snprintf(out, outsz, "Untitled");}
+}
+
+// Try an existing file as gzip project first, then Base64.
+static uint wox_load_file(const char* path)
+{
+    if(wox_file_is_gzip(path))
+    {
+        if(loadState(path, 1)){return 1;}
+    }
+    if(loadBase64(path)){return 2;}
+    if(loadState(path, 1)){return 1;}
+    return 0;
+}
+
+// Resolve project name or file path into resolved_src. Returns 0 on failure.
+static uint wox_load_any(const char* src, char* resolved, size_t resolved_sz)
+{
+    char path[1024], alt[1024];
+    wox_expand_path(path, sizeof(path), src);
+
+    if(wox_file_exists(path))
+    {
+        snprintf(resolved, resolved_sz, "%s", path);
+        return wox_load_file(path);
+    }
+
+    snprintf(alt, sizeof(alt), "%s.b64", path);
+    if(wox_file_exists(alt))
+    {
+        snprintf(resolved, resolved_sz, "%s", alt);
+        return wox_load_file(alt);
+    }
+
+    snprintf(alt, sizeof(alt), "%s.wox.gz", path);
+    if(wox_file_exists(alt))
+    {
+        snprintf(resolved, resolved_sz, "%s", alt);
+        return wox_load_file(alt);
+    }
+
+    if(appdir != NULL)
+    {
+        snprintf(alt, sizeof(alt), "%s%s.wox.gz", appdir, path);
+        if(wox_file_exists(alt))
+        {
+            snprintf(resolved, resolved_sz, "%s", alt);
+            if(loadState(alt, 1)){return 1;}
+        }
+        snprintf(alt, sizeof(alt), "%s%s.b64", appdir, path);
+        if(wox_file_exists(alt))
+        {
+            snprintf(resolved, resolved_sz, "%s", alt);
+            return wox_load_file(alt);
+        }
+        snprintf(alt, sizeof(alt), "%s%s", appdir, path);
+        if(wox_file_exists(alt))
+        {
+            snprintf(resolved, resolved_sz, "%s", alt);
+            return wox_load_file(alt);
+        }
+    }
+
+    snprintf(resolved, resolved_sz, "%s", path);
+    if(loadState(path, 0)){return 1;}
+    return 0;
+}
+
+//*************************************
+// greedy PLY mesher (quads, same-color merge)
+//*************************************
+static int ply_is_air(const int x, const int y, const int z)
+{
+    if(x < 0 || y < 0 || z < 0 || x > 127 || y > 127 || z > 127){return 1;}
+    return g.voxels[PTI((uchar)x, (uchar)y, (uchar)z)] == 0;
+}
+
+static int ply_export_id(const int x, const int y, const int z)
+{
+    if(x < 0 || y < 0 || z < 0 || x > 127 || y > 127 || z > 127){return 0;}
+    const uchar id = g.voxels[PTI((uchar)x, (uchar)y, (uchar)z)];
+    if(id < 8){return 0;}
+    return (int)id;
+}
+
+typedef struct
+{
+    char* d;
+    size_t n;
+    size_t cap;
+} ply_mem;
+static ply_mem ply_vbuf;
+
+static int ply_mem_grow(const size_t extra)
+{
+    if(ply_vbuf.n + extra + 1 <= ply_vbuf.cap){return 1;}
+    size_t nc = ply_vbuf.cap ? ply_vbuf.cap : (size_t)1 << 16;
+    while(nc < ply_vbuf.n + extra + 1){nc *= 2;}
+    char* p = (char*)realloc(ply_vbuf.d, nc);
+    if(p == NULL){return 0;}
+    ply_vbuf.d = p;
+    ply_vbuf.cap = nc;
+    return 1;
+}
+
+void ply_mem_reset(void)
+{
+    ply_vbuf.n = 0;
+}
+
+void ply_mem_free(void)
+{
+    free(ply_vbuf.d);
+    ply_vbuf.d = NULL;
+    ply_vbuf.n = 0;
+    ply_vbuf.cap = 0;
+}
+
+int ply_mem_flush(FILE* f)
+{
+    if(f == NULL){return 0;}
+    if(ply_vbuf.n == 0){return 1;}
+    return fwrite(ply_vbuf.d, 1, ply_vbuf.n, f) == ply_vbuf.n;
+}
+
+static void ply_vert(FILE* f, float x, float y, float z,
+                    const float nx, const float ny, const float nz,
+                    const uchar r, const uchar gc, const uchar b)
+{
+    (void)f;
+    x -= 64.f;
+    y -= 64.f;
+    z -= 64.f;
+    char line[160];
+    const int k = snprintf(line, sizeof(line), "%g %g %g %g %g %g %u %u %u\n",
+                           x, y, z, nx, ny, nz, r, gc, b);
+    if(k > 0 && ply_mem_grow((size_t)k))
+    {
+        memcpy(ply_vbuf.d + ply_vbuf.n, line, (size_t)k);
+        ply_vbuf.n += (size_t)k;
+    }
+}
+
+static void ply_rgb(const int id, uchar* r, uchar* gc, uchar* b)
+{
+    const uint tu = g.colors[id-1];
+    *r  = (uchar)((tu & 0x00FF0000) >> 16);
+    *gc = (uchar)((tu & 0x0000FF00) >> 8);
+    *b  = (uchar)(tu & 0x000000FF);
+}
+
+// Merge runs of identical mask values into axis-aligned rectangles.
+// mask is 128x128, row-major. Returns number of quads. If f != NULL, emits 4 verts each.
+static uint ply_greedy_slice(FILE* f, int* mask, const int dim_u, const int dim_v,
+                             void (*emit)(FILE*, int, int, int, int, int, uchar, uchar, uchar),
+                             const int slice)
+{
+    uint quads = 0;
+    for(int v = 0; v < dim_v; v++)
+    {
+        for(int u = 0; u < dim_u; )
+        {
+            const int id = mask[v*128 + u];
+            if(id == 0){u++; continue;}
+
+            int w = 1;
+            while(u + w < dim_u && mask[v*128 + u + w] == id){w++;}
+
+            int h = 1;
+            int done = 0;
+            while(v + h < dim_v)
+            {
+                for(int k = 0; k < w; k++)
+                {
+                    if(mask[(v+h)*128 + u + k] != id){done = 1; break;}
+                }
+                if(done){break;}
+                h++;
+            }
+
+            uchar r, gc, b;
+            ply_rgb(id, &r, &gc, &b);
+            if(emit != NULL){emit(f, slice, u, v, w, h, r, gc, b);}
+            quads++;
+
+            for(int dv = 0; dv < h; dv++)
+                for(int du = 0; du < w; du++)
+                    mask[(v+dv)*128 + u + du] = 0;
+
+            u += w;
+        }
+    }
+    return quads;
+}
+
+static void ply_emit_px(FILE* f, int x, int z, int y, int w, int h, uchar r, uchar gc, uchar b)
+{
+    const float p = (float)x + 0.5f;
+    const float y0 = (float)y - 0.5f, y1 = (float)(y + h) - 0.5f;
+    const float z0 = (float)z - 0.5f, z1 = (float)(z + w) - 0.5f;
+    ply_vert(f, p, y1, z1,  1,0,0, r,gc,b);
+    ply_vert(f, p, y0, z1,  1,0,0, r,gc,b);
+    ply_vert(f, p, y0, z0,  1,0,0, r,gc,b);
+    ply_vert(f, p, y1, z0,  1,0,0, r,gc,b);
+}
+static void ply_emit_mx(FILE* f, int x, int z, int y, int w, int h, uchar r, uchar gc, uchar b)
+{
+    const float p = (float)x - 0.5f;
+    const float y0 = (float)y - 0.5f, y1 = (float)(y + h) - 0.5f;
+    const float z0 = (float)z - 0.5f, z1 = (float)(z + w) - 0.5f;
+    ply_vert(f, p, y0, z1, -1,0,0, r,gc,b);
+    ply_vert(f, p, y1, z1, -1,0,0, r,gc,b);
+    ply_vert(f, p, y1, z0, -1,0,0, r,gc,b);
+    ply_vert(f, p, y0, z0, -1,0,0, r,gc,b);
+}
+static void ply_emit_py(FILE* f, int y, int z, int x, int w, int h, uchar r, uchar gc, uchar b)
+{
+    const float p = (float)y + 0.5f;
+    const float x0 = (float)x - 0.5f, x1 = (float)(x + h) - 0.5f;
+    const float z0 = (float)z - 0.5f, z1 = (float)(z + w) - 0.5f;
+    ply_vert(f, x0, p, z1,  0,1,0, r,gc,b);
+    ply_vert(f, x1, p, z1,  0,1,0, r,gc,b);
+    ply_vert(f, x1, p, z0,  0,1,0, r,gc,b);
+    ply_vert(f, x0, p, z0,  0,1,0, r,gc,b);
+}
+static void ply_emit_my(FILE* f, int y, int z, int x, int w, int h, uchar r, uchar gc, uchar b)
+{
+    const float p = (float)y - 0.5f;
+    const float x0 = (float)x - 0.5f, x1 = (float)(x + h) - 0.5f;
+    const float z0 = (float)z - 0.5f, z1 = (float)(z + w) - 0.5f;
+    ply_vert(f, x1, p, z1,  0,-1,0, r,gc,b);
+    ply_vert(f, x0, p, z1,  0,-1,0, r,gc,b);
+    ply_vert(f, x0, p, z0,  0,-1,0, r,gc,b);
+    ply_vert(f, x1, p, z0,  0,-1,0, r,gc,b);
+}
+static void ply_emit_pz(FILE* f, int z, int x, int y, int w, int h, uchar r, uchar gc, uchar b)
+{
+    const float p = (float)z + 0.5f;
+    const float y0 = (float)y - 0.5f, y1 = (float)(y + h) - 0.5f;
+    const float x0 = (float)x - 0.5f, x1 = (float)(x + w) - 0.5f;
+    ply_vert(f, x0, y1, p,  0,0,1, r,gc,b);
+    ply_vert(f, x0, y0, p,  0,0,1, r,gc,b);
+    ply_vert(f, x1, y0, p,  0,0,1, r,gc,b);
+    ply_vert(f, x1, y1, p,  0,0,1, r,gc,b);
+}
+static void ply_emit_mz(FILE* f, int z, int x, int y, int w, int h, uchar r, uchar gc, uchar b)
+{
+    const float p = (float)z - 0.5f;
+    const float y0 = (float)y - 0.5f, y1 = (float)(y + h) - 0.5f;
+    const float x0 = (float)x - 0.5f, x1 = (float)(x + w) - 0.5f;
+    ply_vert(f, x1, y1, p,  0,0,-1, r,gc,b);
+    ply_vert(f, x1, y0, p,  0,0,-1, r,gc,b);
+    ply_vert(f, x0, y0, p,  0,0,-1, r,gc,b);
+    ply_vert(f, x0, y1, p,  0,0,-1, r,gc,b);
+}
+
+// One quad per visible cube face (no merging). Vertices go to ply_vbuf.
+uint ply_cube_mesh(FILE* f, const int write_verts)
+{
+    (void)write_verts;
+    uint faces = 0;
+    for(int x = 0; x < 128; x++)
+    {
+        for(int y = 0; y < 128; y++)
+        {
+            for(int z = 0; z < 128; z++)
+            {
+                const int id = ply_export_id(x, y, z);
+                if(!id){continue;}
+                uchar r, gc, b;
+                ply_rgb(id, &r, &gc, &b);
+                if(ply_is_air(x+1, y, z)){faces++; ply_emit_px(f, x, z, y, 1, 1, r, gc, b);}
+                if(ply_is_air(x-1, y, z)){faces++; ply_emit_mx(f, x, z, y, 1, 1, r, gc, b);}
+                if(ply_is_air(x, y+1, z)){faces++; ply_emit_py(f, y, z, x, 1, 1, r, gc, b);}
+                if(ply_is_air(x, y-1, z)){faces++; ply_emit_my(f, y, z, x, 1, 1, r, gc, b);}
+                if(ply_is_air(x, y, z+1)){faces++; ply_emit_pz(f, z, x, y, 1, 1, r, gc, b);}
+                if(ply_is_air(x, y, z-1)){faces++; ply_emit_mz(f, z, x, y, 1, 1, r, gc, b);}
+            }
+        }
+    }
+    return faces;
+}
+
+// Vertices go to ply_vbuf. Returns quad count.
+uint ply_greedy_mesh(FILE* f, const int write_verts)
+{
+    (void)write_verts;
+    int mask[128 * 128];
+    uint quads = 0;
+    FILE* out = f;
+
+    for(int x = 0; x < 128; x++)
+    {
+        memset(mask, 0, sizeof(mask));
+        for(int y = 0; y < 128; y++)
+            for(int z = 0; z < 128; z++)
+            {
+                const int id = ply_export_id(x, y, z);
+                if(id && ply_is_air(x+1, y, z)){mask[y*128 + z] = id;}
+            }
+        quads += ply_greedy_slice(out, mask, 128, 128, ply_emit_px, x);
+
+        memset(mask, 0, sizeof(mask));
+        for(int y = 0; y < 128; y++)
+            for(int z = 0; z < 128; z++)
+            {
+                const int id = ply_export_id(x, y, z);
+                if(id && ply_is_air(x-1, y, z)){mask[y*128 + z] = id;}
+            }
+        quads += ply_greedy_slice(out, mask, 128, 128, ply_emit_mx, x);
+    }
+
+    for(int y = 0; y < 128; y++)
+    {
+        memset(mask, 0, sizeof(mask));
+        for(int x = 0; x < 128; x++)
+            for(int z = 0; z < 128; z++)
+            {
+                const int id = ply_export_id(x, y, z);
+                if(id && ply_is_air(x, y+1, z)){mask[x*128 + z] = id;}
+            }
+        quads += ply_greedy_slice(out, mask, 128, 128, ply_emit_py, y);
+
+        memset(mask, 0, sizeof(mask));
+        for(int x = 0; x < 128; x++)
+            for(int z = 0; z < 128; z++)
+            {
+                const int id = ply_export_id(x, y, z);
+                if(id && ply_is_air(x, y-1, z)){mask[x*128 + z] = id;}
+            }
+        quads += ply_greedy_slice(out, mask, 128, 128, ply_emit_my, y);
+    }
+
+    for(int z = 0; z < 128; z++)
+    {
+        memset(mask, 0, sizeof(mask));
+        for(int y = 0; y < 128; y++)
+            for(int x = 0; x < 128; x++)
+            {
+                const int id = ply_export_id(x, y, z);
+                if(id && ply_is_air(x, y, z+1)){mask[y*128 + x] = id;}
+            }
+        quads += ply_greedy_slice(out, mask, 128, 128, ply_emit_pz, z);
+
+        memset(mask, 0, sizeof(mask));
+        for(int y = 0; y < 128; y++)
+            for(int x = 0; x < 128; x++)
+            {
+                const int id = ply_export_id(x, y, z);
+                if(id && ply_is_air(x, y, z-1)){mask[y*128 + x] = id;}
+            }
+        quads += ply_greedy_slice(out, mask, 128, 128, ply_emit_mz, z);
+    }
+
+    return quads;
+}
+
+//*************************************
+// more utility functions
+//*************************************
+void printAttrib(SDL_GLattr attr, char* name)
+{
+    int i;
+    SDL_GL_GetAttribute(attr, &i);
+    printf("%s: %i\n", name, i);
+}
+SDL_Surface* SDL_RGBA32Surface(Uint32 w, Uint32 h)
+{
+    return SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA32);
+}
+void drawHud(const uint type);
+void doPerspective()
+{
+    glViewport(0, 0, winw, winh);
+    SDL_FreeSurface(sHud);
+    sHud = SDL_RGBA32Surface(winw, winh);
+    drawHud(0);
+    hudmap = esLoadTextureA(winw, winh, sHud->pixels, 0);
+    ww = (float)winw;
+    wh = (float)winh;
+}
+uint insideFrustum(const float x, const float y, const float z)
+{
+    const float xm = x+g.pp.x, ym = y+g.pp.y, zm = z+g.pp.z;
+    return (xm*look_dir.x) + (ym*look_dir.y) + (zm*look_dir.z) > 0.f; // check the angle
+}
+SDL_Surface* surfaceFromData(const Uint32* data, Uint32 w, Uint32 h)
+{
+    SDL_Surface* s = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA32);
+    memcpy(s->pixels, data, s->pitch*h);
+    return s;
+}
+Uint32 getpixel(const SDL_Surface *surface, Uint32 x, Uint32 y)
+{
+    const Uint8 *p = (Uint8*)surface->pixels + y * surface->pitch + x * surface->format->BytesPerPixel;
+    return *(Uint32*)p;
+}
+void setpixel(SDL_Surface *surface, Uint32 x, Uint32 y, Uint32 pix)
+{
+    const Uint8* pixel = (Uint8*)surface->pixels + (y * surface->pitch) + (x * surface->format->BytesPerPixel);
+    *((Uint32*)pixel) = pix;
+}
+void replaceColour(SDL_Surface* surf, SDL_Rect r, Uint32 old_color, Uint32 new_color)
+{
+    const Uint32 max_y = r.y+r.h;
+    const Uint32 max_x = r.x+r.w;
+    for(Uint32 y = r.y; y < max_y; ++y)
+        for(Uint32 x = r.x; x < max_x; ++x)
+            if(getpixel(surf, x, y) == old_color){setpixel(surf, x, y, new_color);}
+}
+void updateSelectColor()
+{
+    const uint tu = g.colors[pal_color_index()];
+    sclr = SDL_MapRGB(sHud->format, (tu & 0x00FF0000) >> 16,
+                                    (tu & 0x0000FF00) >> 8,
+                                     tu & 0x000000FF);
+}
+
+//*************************************
+// Simple Font
+//*************************************
+int drawText(SDL_Surface* o, const char* s, Uint32 x, Uint32 y, Uint8 colour)
+{
+    static const Uint8 font_map[] = {255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,0,0,0,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,0,255,255,0,0,0,0,0,255,255,0,0,0,0,0,0,0,0,0,0,255,255,0,0,0,0,0,0,0,0,0,0,255,0,0,0,0,0,0,0,0,255,255,255,0,0,0,0,0,0,255,0,0,0,0,0,0,255,255,0,0,0,0,255,255,255,0,0,255,255,255,255,255,0,0,0,0,255,255,255,0,255,0,0,0,0,0,255,0,0,0,0,0,255,255,0,0,0,0,0,255,0,0,0,0,0,255,255,255,0,0,0,0,0,0,0,0,0,0,0,0,0,255,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,0,0,0,0,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,0,0,255,255,255,255,0,0,255,0,0,0,0,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,255,255,0,255,255,0,0,0,0,0,255,0,0,0,0,255,0,0,0,0,0,0,255,0,0,0,0,255,255,0,0,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,0,255,255,0,0,255,255,0,0,0,0,255,255,255,255,0,0,255,255,0,0,255,0,0,255,255,255,0,0,255,255,255,0,0,255,255,255,255,255,0,0,255,255,255,0,0,255,0,0,255,255,255,255,0,0,0,0,255,0,0,255,0,0,255,255,255,0,0,0,255,255,255,0,0,0,0,0,0,255,255,0,0,0,255,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,0,0,0,0,255,255,0,0,255,0,0,255,255,255,255,255,255,0,0,255,255,0,0,255,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,255,255,255,255,0,0,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,0,0,0,0,0,255,0,0,255,255,0,0,0,0,255,255,0,0,255,255,255,0,0,255,255,0,0,255,255,255,0,0,255,255,255,255,255,255,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,255,255,255,255,255,255,255,0,255,255,255,255,255,255,255,255,0,0,255,0,0,255,0,0,255,255,0,0,0,0,255,255,255,255,0,0,255,255,255,0,0,0,0,255,255,255,0,0,255,255,255,0,0,255,255,255,255,255,0,0,255,255,255,0,0,255,0,0,255,255,255,255,0,0,0,0,0,0,255,255,0,0,255,255,255,0,0,0,0,255,0,0,0,0,0,0,0,0,255,0,0,0,255,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,0,0,0,0,255,255,0,0,255,0,0,255,255,255,255,255,255,0,0,255,255,0,0,255,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,255,255,0,0,255,0,0,0,0,255,255,0,0,0,0,255,255,255,255,0,0,0,255,0,0,0,0,255,0,0,0,0,0,255,255,0,0,0,0,255,0,0,0,0,0,255,0,0,0,0,255,0,0,0,255,255,0,0,0,0,0,0,0,0,0,0,255,0,0,0,0,0,0,0,255,255,0,0,0,0,0,0,0,0,0,255,0,0,0,255,0,0,0,0,0,255,255,0,0,0,0,255,0,0,0,0,0,255,255,0,0,0,0,0,0,0,255,0,255,0,0,0,0,0,0,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,0,0,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,0,0,0,0,0,255,255,0,0,255,0,0,255,255,255,255,255,0,0,255,255,255,255,0,0,255,255,0,0,0,255,255,0,0,255,255,255,0,0,255,255,255,255,255,255,255,0,0,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,255,255,0,255,255,255,255,255,255,255,255,0,0,255,0,0,255,0,0,0,0,0,255,0,0,255,255,255,255,0,0,255,255,255,0,0,0,0,0,0,0,0,0,0,0,0,0,0,255,255,255,255,255,0,0,0,0,0,0,0,255,0,0,255,255,255,255,0,0,0,0,0,255,255,255,0,0,255,255,255,0,255,0,0,0,0,255,0,0,0,255,0,0,0,0,0,0,255,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,0,0,0,0,255,255,0,0,255,0,0,0,0,0,255,255,255,0,0,255,255,0,0,255,255,255,0,0,255,0,0,0,0,255,255,0,0,255,0,0,255,0,0,255,255,255,0,0,255,255,255,0,0,0,0,255,255,255,0,0,0,255,255,255,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,0,0,0,0,255,0,0,255,0,0,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,0,0,0,0,255,255,255,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,0,0,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,255,255,255,0,0,0,0,255,255,0,0,255,0,0,255,255,255,255,0,0,255,255,255,0,0,0,255,255,0,255,0,0,255,255,0,0,0,0,255,0,0,0,0,0,255,255,255,255,0,0,255,255,0,0,0,0,255,0,0,255,255,0,0,0,0,255,255,255,255,255,0,255,255,255,255,255,255,255,255,0,0,255,0,0,255,0,0,255,255,0,0,0,0,255,255,255,255,0,0,255,255,255,0,0,0,0,255,255,255,0,0,255,255,255,0,0,255,255,0,0,0,0,0,255,255,255,0,0,255,0,0,255,255,255,255,0,0,0,0,0,255,255,255,0,0,255,255,255,0,255,255,0,0,255,255,0,0,0,255,255,0,0,0,0,0,255,255,255,0,0,0,0,0,0,0,255,0,0,255,255,255,0,0,0,0,0,0,0,255,255,255,0,0,0,0,0,255,255,0,0,255,255,0,0,255,255,255,0,0,255,0,0,0,0,255,255,0,0,0,0,0,0,0,0,255,255,255,0,0,255,255,255,255,0,0,255,255,255,0,0,0,255,255,255,0,0,0,0,0,0,0,255,255,0,0,0,0,255,255,255,0,0,255,255,0,0,0,0,0,0,0,0,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,0,0,0,0,0,0,255,255,0,0,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,0,0,255,255,0,0,255,255,0,0,255,0,0,0,0,255,0,0,255,0,0,255,0,0,255,0,0,0,0,255,255,0,0,0,0,255,255,255,0,0,255,0,0,255,255,0,0,255,0,0,255,255,255,0,0,255,255,255,255,255,255,0,0,0,255,255,0,0,255,255,255,255,255,0,0,0,0,255,255,0,0,255,255,255,0,0,255,0,0,255,255,0,0,255,0,0,0,0,0,255,255,255,255,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,255,255,0,0,0,0,255,255,255,255,0,0,255,255,255,0,0,0,0,255,255,255,0,0,255,255,255,0,0,255,255,255,0,0,0,0,255,255,255,0,0,255,0,0,255,255,255,255,0,0,0,0,0,0,255,255,0,0,255,255,255,0,255,255,255,255,255,255,0,0,0,255,255,255,0,0,0,0,255,255,255,0,0,0,0,255,255,255,255,0,0,255,255,255,0,0,0,0,255,0,0,255,255,255,255,255,255,0,0,255,255,0,0,255,255,0,0,255,255,255,0,0,255,0,0,0,0,255,255,0,0,0,255,255,0,0,0,255,255,0,0,0,0,255,255,255,0,0,255,255,0,0,0,255,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,0,0,255,255,0,0,0,0,255,255,255,255,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,0,0,0,0,0,0,255,255,0,0,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,0,0,0,0,0,0,255,255,0,0,255,255,0,0,255,0,0,0,0,255,0,0,0,0,0,0,0,0,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,0,0,255,255,0,0,255,255,255,255,255,255,255,0,0,0,0,0,0,0,0,255,255,255,255,0,0,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,255,255,255,0,0,255,255,255,255,255,255,255,0,255,255,255,255,255,255,255,0,0,255,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,255,0,0,255,255,0,0,255,0,0,255,255,255,0,0,255,255,255,0,0,255,255,255,0,0,0,0,255,255,255,0,0,255,0,0,255,255,255,255,0,0,0,0,255,0,0,255,0,0,255,255,255,0,255,255,255,255,255,255,0,0,0,255,255,255,255,0,0,0,255,255,255,0,0,0,0,255,255,255,255,0,0,255,255,255,0,0,0,0,255,255,0,0,255,255,255,255,255,0,0,255,255,0,0,255,255,0,0,255,255,255,0,0,255,255,0,0,255,255,255,255,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,255,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,0,0,255,255,0,0,0,0,255,255,255,255,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,0,0,0,0,255,0,0,255,0,0,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,255,255,0,0,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,255,255,0,0,255,255,0,0,255,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,255,255,0,0,255,255,0,0,255,0,0,255,0,0,255,255,255,255,0,0,255,255,0,0,255,255,255,0,0,255,0,0,255,255,0,0,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,255,255,255,0,0,0,0,0,0,255,255,255,0,255,255,255,255,255,255,255,0,0,255,255,255,0,0,0,0,0,0,0,255,255,0,0,0,0,0,0,0,0,0,0,255,255,0,0,0,0,0,0,0,255,255,255,255,0,0,0,0,0,0,0,0,255,255,255,0,0,0,0,0,0,0,0,0,0,255,0,0,255,255,0,0,0,0,0,0,0,0,255,255,255,255,255,255,0,0,0,255,255,255,255,0,255,0,0,0,0,0,255,0,0,255,255,255,255,255,0,0,0,0,0,255,0,0,255,255,255,0,0,0,0,0,0,0,255,255,255,0,0,255,255,255,0,0,0,0,0,255,255,255,0,0,255,255,255,255,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255,255,0,0,0,0,0,0,255,0,0,0,0,0,0,0,0,0,0,255,255,0,0,0,0,255,0,0,0,0,0,255,0,0,0,0,0,0,0,255,255,255,0,0,0,0,0,0,0,255,255,0,0,0,0,255,0,0,0,0,255,255,0,0,0,0,0,0,255,255,0,0,255,255,0,0,0,0,255,255,0,0,255,0,0,0,0,255,0,0,0,0,0,255,255,0,0,0,0,0,0,0,255,255,0,0,0,0,255,255,0,0,0,255,0,0,0,0,0,255,255,0,0,255,255,255,0,0,255,255,0,0,255,0,0,255,255,0,0,255,255,0,0,255,255,0,0,0,0,0,255,0,0,0,0,255,0,0,0,0,0,0,0,0,0,0,255,0,0,0,0,255,255,255,255,0,0,255,255,0,0,0,0,255,255,0,0,0,0,255,255,255,0,0,255,255,255,0,0,0,0,255,255,0,0,0,0,255,0,0,0,0,255,255,255,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,0,0,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,0,0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255};
+    static const Uint32 m = 1;
+    static SDL_Surface* font_black = NULL;
+    static SDL_Surface* font_white = NULL;
+    static SDL_Surface* font_aqua = NULL;
+    static SDL_Surface* font_gold = NULL;
+    static SDL_Surface* font_cia = NULL;
+    // static SDL_Surface* font_red = NULL;
+    // static SDL_Surface* font_green = NULL;
+    // static SDL_Surface* font_blue = NULL;
+    if(font_black == NULL)
+    {
+        font_black = SDL_RGBA32Surface(380, 11);
+        for(int y = 0; y < font_black->h; y++)
+        {
+            for(int x = 0; x < font_black->w; x++)
+            {
+                const Uint8 c = font_map[(y*font_black->w)+x];
+                setpixel(font_black, x, y, SDL_MapRGBA(font_black->format, c, c, c, 255-c));
+            }
+        }
+        font_white = SDL_RGBA32Surface(380, 11);
+        SDL_BlitSurface(font_black, &font_black->clip_rect, font_white, &font_white->clip_rect);
+        replaceColour(font_white, font_white->clip_rect, 0xFF000000, 0xFFFFFFFF);
+        font_aqua = SDL_RGBA32Surface(380, 11);
+        SDL_BlitSurface(font_black, &font_black->clip_rect, font_aqua, &font_aqua->clip_rect);
+        replaceColour(font_aqua, font_aqua->clip_rect, 0xFF000000, 0xFFFFFF00);
+        font_gold = SDL_RGBA32Surface(380, 11);
+        SDL_BlitSurface(font_black, &font_black->clip_rect, font_gold, &font_gold->clip_rect);
+        replaceColour(font_gold, font_gold->clip_rect, 0xFF000000, 0xFF00BFFF);
+        font_cia = SDL_RGBA32Surface(380, 11);
+        SDL_BlitSurface(font_black, &font_black->clip_rect, font_cia, &font_cia->clip_rect);
+        replaceColour(font_cia, font_cia->clip_rect, 0xFF000000, 0xFF97C920);
+        // #20c997(0xFF97C920) #00FF41(0xFF41FF00) #61d97c(0xFF7CD961) #51d4e9(0xFFE9D451)
+        // font_red = SDL_RGBA32Surface(380, 11);
+        // SDL_BlitSurface(font_black, &font_black->clip_rect, font_red, &font_red->clip_rect);
+        // replaceColour(font_red, font_red->clip_rect, 0xFF000000, 0xFF0000FF);
+        // font_green = SDL_RGBA32Surface(380, 11);
+        // SDL_BlitSurface(font_black, &font_black->clip_rect, font_green, &font_green->clip_rect);
+        // replaceColour(font_green, font_green->clip_rect, 0xFF000000, 0xFF00FF00);
+        // font_blue = SDL_RGBA32Surface(380, 11);
+        // SDL_BlitSurface(font_black, &font_black->clip_rect, font_blue, &font_blue->clip_rect);
+        // replaceColour(font_blue, font_blue->clip_rect, 0xFF000000, 0xFFFF0000);
+    }
+    if(s[0] == '*' && s[1] == 'K') // signal cleanup
+    {
+        SDL_FreeSurface(font_black);
+        SDL_FreeSurface(font_white);
+        SDL_FreeSurface(font_aqua);
+        SDL_FreeSurface(font_gold);
+        SDL_FreeSurface(font_cia);
+        // SDL_FreeSurface(font_red);
+        // SDL_FreeSurface(font_green);
+        // SDL_FreeSurface(font_blue);
+        font_black = NULL;
+        return 0;
+    }
+    SDL_Surface* font = font_black;
+    if(     colour == 1){font = font_white;}
+    else if(colour == 2){font = font_aqua;}
+    else if(colour == 3){font = font_gold;}
+    else if(colour == 4){font = font_cia;}
+    // else if(colour == 5){font = font_red;}
+    // else if(colour == 6){font = font_green;}
+    // else if(colour == 7){font = font_blue;}
+    SDL_Rect dr = {x, y, 0, 0};
+    const Uint32 len = strlen(s);
+    for(Uint32 i = 0; i < len; i++)
+    {
+             if(s[i] == 'A'){SDL_BlitSurface(font, &(SDL_Rect){0,0,7,9}, o, &dr); dr.x += 7+m;}
+        else if(s[i] == 'B'){SDL_BlitSurface(font, &(SDL_Rect){7,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'C'){SDL_BlitSurface(font, &(SDL_Rect){13,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'D'){SDL_BlitSurface(font, &(SDL_Rect){19,0,7,9}, o, &dr); dr.x += 7+m;}
+        else if(s[i] == 'E'){SDL_BlitSurface(font, &(SDL_Rect){26,0,5,9}, o, &dr); dr.x += 5+m;}
+        else if(s[i] == 'F'){SDL_BlitSurface(font, &(SDL_Rect){31,0,5,9}, o, &dr); dr.x += 5+m;}
+        else if(s[i] == 'G'){SDL_BlitSurface(font, &(SDL_Rect){36,0,7,9}, o, &dr); dr.x += 7+m;}
+        else if(s[i] == 'H'){SDL_BlitSurface(font, &(SDL_Rect){43,0,7,9}, o, &dr); dr.x += 7+m;}
+        else if(s[i] == 'I'){SDL_BlitSurface(font, &(SDL_Rect){50,0,4,9}, o, &dr); dr.x += 4+m;}
+        else if(s[i] == 'J'){SDL_BlitSurface(font, &(SDL_Rect){54,0,5,9}, o, &dr); dr.x += 5+m;}
+        else if(s[i] == 'K'){SDL_BlitSurface(font, &(SDL_Rect){59,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'L'){SDL_BlitSurface(font, &(SDL_Rect){65,0,5,9}, o, &dr); dr.x += 5+m;}
+        else if(s[i] == 'M'){SDL_BlitSurface(font, &(SDL_Rect){70,0,9,9}, o, &dr); dr.x += 9+m;}
+        else if(s[i] == 'N'){SDL_BlitSurface(font, &(SDL_Rect){79,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'O'){SDL_BlitSurface(font, &(SDL_Rect){85,0,7,9}, o, &dr); dr.x += 7+m;}
+        else if(s[i] == 'P'){SDL_BlitSurface(font, &(SDL_Rect){92,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'Q'){SDL_BlitSurface(font, &(SDL_Rect){98,0,7,11}, o, &dr); dr.x += 7+m;}
+        else if(s[i] == 'R'){SDL_BlitSurface(font, &(SDL_Rect){105,0,7,9}, o, &dr); dr.x += 7+m;}
+        else if(s[i] == 'S'){SDL_BlitSurface(font, &(SDL_Rect){112,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'T'){SDL_BlitSurface(font, &(SDL_Rect){118,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'U'){SDL_BlitSurface(font, &(SDL_Rect){124,0,7,9}, o, &dr); dr.x += 7+m;}
+        else if(s[i] == 'V'){SDL_BlitSurface(font, &(SDL_Rect){131,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'W'){SDL_BlitSurface(font, &(SDL_Rect){137,0,10,9}, o, &dr); dr.x += 10+m;}
+        else if(s[i] == 'X'){SDL_BlitSurface(font, &(SDL_Rect){147,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'Y'){SDL_BlitSurface(font, &(SDL_Rect){153,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'Z'){SDL_BlitSurface(font, &(SDL_Rect){159,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'a'){SDL_BlitSurface(font, &(SDL_Rect){165,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'b'){SDL_BlitSurface(font, &(SDL_Rect){171,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'c'){SDL_BlitSurface(font, &(SDL_Rect){177,0,5,9}, o, &dr); dr.x += 5+m;}
+        else if(s[i] == 'd'){SDL_BlitSurface(font, &(SDL_Rect){182,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'e'){SDL_BlitSurface(font, &(SDL_Rect){188,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'f'){SDL_BlitSurface(font, &(SDL_Rect){194,0,4,9}, o, &dr); dr.x += 3+m;}
+        else if(s[i] == 'g'){SDL_BlitSurface(font, &(SDL_Rect){198,0,6,11}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'h'){SDL_BlitSurface(font, &(SDL_Rect){204,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'i'){SDL_BlitSurface(font, &(SDL_Rect){210,0,2,9}, o, &dr); dr.x += 2+m;}
+        else if(s[i] == 'j'){SDL_BlitSurface(font, &(SDL_Rect){212,0,3,11}, o, &dr); dr.x += 3+m;}
+        else if(s[i] == 'k'){SDL_BlitSurface(font, &(SDL_Rect){215,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'l'){SDL_BlitSurface(font, &(SDL_Rect){221,0,2,9}, o, &dr); dr.x += 2+m;}
+        else if(s[i] == 'm'){SDL_BlitSurface(font, &(SDL_Rect){223,0,10,9}, o, &dr); dr.x += 10+m;}
+        else if(s[i] == 'n'){SDL_BlitSurface(font, &(SDL_Rect){233,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'o'){SDL_BlitSurface(font, &(SDL_Rect){239,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'p'){SDL_BlitSurface(font, &(SDL_Rect){245,0,6,11}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'q'){SDL_BlitSurface(font, &(SDL_Rect){251,0,6,11}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'r'){SDL_BlitSurface(font, &(SDL_Rect){257,0,4,9}, o, &dr); dr.x += 4+m;}
+        else if(s[i] == 's'){SDL_BlitSurface(font, &(SDL_Rect){261,0,5,9}, o, &dr); dr.x += 5+m;}
+        else if(s[i] == 't'){SDL_BlitSurface(font, &(SDL_Rect){266,0,4,9}, o, &dr); dr.x += 4+m;}
+        else if(s[i] == 'u'){SDL_BlitSurface(font, &(SDL_Rect){270,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'v'){SDL_BlitSurface(font, &(SDL_Rect){276,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'w'){SDL_BlitSurface(font, &(SDL_Rect){282,0,8,9}, o, &dr); dr.x += 8+m;}
+        else if(s[i] == 'x'){SDL_BlitSurface(font, &(SDL_Rect){290,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'y'){SDL_BlitSurface(font, &(SDL_Rect){296,0,6,11}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == 'z'){SDL_BlitSurface(font, &(SDL_Rect){302,0,5,9}, o, &dr); dr.x += 5+m;}
+        else if(s[i] == '0'){SDL_BlitSurface(font, &(SDL_Rect){307,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == '1'){SDL_BlitSurface(font, &(SDL_Rect){313,0,4,9}, o, &dr); dr.x += 4+m;}
+        else if(s[i] == '2'){SDL_BlitSurface(font, &(SDL_Rect){317,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == '3'){SDL_BlitSurface(font, &(SDL_Rect){323,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == '4'){SDL_BlitSurface(font, &(SDL_Rect){329,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == '5'){SDL_BlitSurface(font, &(SDL_Rect){335,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == '6'){SDL_BlitSurface(font, &(SDL_Rect){341,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == '7'){SDL_BlitSurface(font, &(SDL_Rect){347,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == '8'){SDL_BlitSurface(font, &(SDL_Rect){353,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == '9'){SDL_BlitSurface(font, &(SDL_Rect){359,0,6,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == ':'){SDL_BlitSurface(font, &(SDL_Rect){365,0,2,9}, o, &dr); dr.x += 2+m;}
+        else if(s[i] == '.'){SDL_BlitSurface(font, &(SDL_Rect){367,0,2,9}, o, &dr); dr.x += 2+m;}
+        else if(s[i] == '+'){SDL_BlitSurface(font, &(SDL_Rect){369,0,7,9}, o, &dr); dr.x += 7+m;}
+        else if(s[i] == '-'){dr.x++; SDL_BlitSurface(font, &(SDL_Rect){376,0,4,9}, o, &dr); dr.x += 6+m;}
+        else if(s[i] == ' '){dr.x += 2+m;}
+    }
+    return dr.x;
+}
+int lenText(const char* s)
+{
+    int x = 0;
+    static const int m = 1;
+    const Uint32 len = strlen(s);
+    for(Uint32 i = 0; i < len; i++)
+    {
+             if(s[i] == 'A'){x += 7+m;}
+        else if(s[i] == 'B'){x += 6+m;}
+        else if(s[i] == 'C'){x += 6+m;}
+        else if(s[i] == 'D'){x += 7+m;}
+        else if(s[i] == 'E'){x += 5+m;}
+        else if(s[i] == 'F'){x += 5+m;}
+        else if(s[i] == 'G'){x += 7+m;}
+        else if(s[i] == 'H'){x += 7+m;}
+        else if(s[i] == 'I'){x += 4+m;}
+        else if(s[i] == 'J'){x += 5+m;}
+        else if(s[i] == 'K'){x += 6+m;}
+        else if(s[i] == 'L'){x += 5+m;}
+        else if(s[i] == 'M'){x += 9+m;}
+        else if(s[i] == 'N'){x += 6+m;}
+        else if(s[i] == 'O'){x += 7+m;}
+        else if(s[i] == 'P'){x += 6+m;}
+        else if(s[i] == 'Q'){x += 7+m;}
+        else if(s[i] == 'R'){x += 7+m;}
+        else if(s[i] == 'S'){x += 6+m;}
+        else if(s[i] == 'T'){x += 6+m;}
+        else if(s[i] == 'U'){x += 7+m;}
+        else if(s[i] == 'V'){x += 6+m;}
+        else if(s[i] == 'W'){x += 10+m;}
+        else if(s[i] == 'X'){x += 6+m;}
+        else if(s[i] == 'Y'){x += 6+m;}
+        else if(s[i] == 'Z'){x += 6+m;}
+        else if(s[i] == 'a'){x += 6+m;}
+        else if(s[i] == 'b'){x += 6+m;}
+        else if(s[i] == 'c'){x += 5+m;}
+        else if(s[i] == 'd'){x += 6+m;}
+        else if(s[i] == 'e'){x += 6+m;}
+        else if(s[i] == 'f'){x += 3+m;}
+        else if(s[i] == 'g'){x += 6+m;}
+        else if(s[i] == 'h'){x += 6+m;}
+        else if(s[i] == 'i'){x += 2+m;}
+        else if(s[i] == 'j'){x += 3+m;}
+        else if(s[i] == 'k'){x += 6+m;}
+        else if(s[i] == 'l'){x += 2+m;}
+        else if(s[i] == 'm'){x += 10+m;}
+        else if(s[i] == 'n'){x += 6+m;}
+        else if(s[i] == 'o'){x += 6+m;}
+        else if(s[i] == 'p'){x += 6+m;}
+        else if(s[i] == 'q'){x += 6+m;}
+        else if(s[i] == 'r'){x += 4+m;}
+        else if(s[i] == 's'){x += 5+m;}
+        else if(s[i] == 't'){x += 4+m;}
+        else if(s[i] == 'u'){x += 6+m;}
+        else if(s[i] == 'v'){x += 6+m;}
+        else if(s[i] == 'w'){x += 8+m;}
+        else if(s[i] == 'x'){x += 6+m;}
+        else if(s[i] == 'y'){x += 6+m;}
+        else if(s[i] == 'z'){x += 5+m;}
+        else if(s[i] == '0'){x += 6+m;}
+        else if(s[i] == '1'){x += 4+m;}
+        else if(s[i] == '2'){x += 6+m;}
+        else if(s[i] == '3'){x += 6+m;}
+        else if(s[i] == '4'){x += 6+m;}
+        else if(s[i] == '5'){x += 6+m;}
+        else if(s[i] == '6'){x += 6+m;}
+        else if(s[i] == '7'){x += 6+m;}
+        else if(s[i] == '8'){x += 6+m;}
+        else if(s[i] == '9'){x += 6+m;}
+        else if(s[i] == ':'){x += 2+m;}
+        else if(s[i] == '.'){x += 2+m;}
+        else if(s[i] == '+'){x += 7+m;}
+        else if(s[i] == '-'){x += 7+m;}
+        else if(s[i] == ' '){x += 2+m;}
+    }
+    return x;
+}
+
+//*************************************
+// assets
+//*************************************
+const unsigned char icon[] = { // 16, 16, 4
+  "\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000\000"
+  "\000\000\"\070)\071f\000\000\000\"\377\377\377\000\377\377\377\000\377\377\377\000\377\377"
+  "\377\000\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377"
+  "\000\377\377\377\000\377\377\377\000\227o\231\231\235t\237\231\264\205\267\314"
+  "\323\234\326\356\277\216\302\335\260\202\262\273\227o\231\210iMjU\377\377"
+  "\377\000\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377"
+  "\000\377\377\377\000\235t\237\273\347\253\350\377\347\253\350\377\365\255\354"
+  "\377\360\252\347\377\356\255\355\377\347\253\350\377\356\255\355\377\264"
+  "\205\267\356I\066J\063\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377"
+  "\000#\031#\021\235t\237\252\347\253\350\377\345\247\344\377\336\247\346\377\213"
+  "\236\342\377\251\240\341\377\317\245\345\377\336\247\346\377\345\247\344"
+  "\377\351\254\353\377\277\216\302\377\017\013\017\"\377\377\377\000\377\377\377"
+  "\000\377\377\377\000C\062Df\323\234\326\377\347\253\350\377\360\252\347\377\201"
+  "\233\337\377,\215\330\377\061\221\333\377:\227\337\377S\226\335\377\326\246"
+  "\345\377\356\255\355\377\306\223\307\356\377\377\377\000\377\377\377\000\377"
+  "\377\377\000\377\377\377\000\017\013\017\063\305\224\313\356\351\254\353\377\345"
+  "\247\344\377\326\246\345\377\277\232\334\377\232\215\321\377\210\222\345"
+  "\377\221\227\335\377\356\255\355\377\356\255\355\377\224\202\273\356\000\000"
+  "\000\"\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000n\205\277\314"
+  "\365\255\354\377\341\245\342\377\347\253\350\377\345\247\344\377\365\255"
+  "\354\377\360\252\347\377\355\247\345\377\347\253\350\377\341\245\342\377"
+  "\245\201\351\377\223r\324\377\203g\276\335oW\240\231\060&ED\377\377\377\000"
+  "Eh\237\273\272\246\351\377\336\247\346\377\360\252\347\377\360\252\347\377"
+  "\351\254\353\377\345\247\344\377\317\245\345\377\351\254\353\377\276\231"
+  "\346\377\241\177\362\377\246\202\360\377\253\206\366\377\234y\340\377'\037"
+  "\071f\377\377\377\000\060Cx\231B\224\340\377P\230\337\377s\235\342\377\235\234"
+  "\336\377\317\245\345\377\317\245\345\377H\234\345\377Y\234\344\377`\231\333"
+  "\377\223z\325\377\234y\340\377\253\206\366\377\213m\310\335\000\000\000\021\377"
+  "\377\377\000)T\200wHw\302\377L\202\315\377M\224\342\377:\227\337\377H\234\345"
+  "\377P\230\337\377G~\310\377C\206\321\377S\221\311\377\223z\325\377\223r\324"
+  "\377\253\206\366\377|a\263\273\377\377\377\000\377\377\377\000\067bxDQz\275\377"
+  "S\\\256\377\256\177\357\377\202{\332\377E}\306\377G~\310\377K\\\252\377D"
+  "Z\245\377xs\321\377\263\206\372\377\246\202\360\377\246\202\360\377kT\233"
+  "\210\377\377\377\000\377\377\377\000DME\"T\225\312\377B\214\331\377o\213\344"
+  "\377|}\332\377K\\\252\377Ja\256\377B\214\331\377C\206\321\377p\210\323\377"
+  "\225n\320\356\237|\345\377\242~\351\377M=pU\377\377\377\000\377\377\377\000\377"
+  "\377\377\000R~\236\252t\277\371\377Q\244\344\377B\224\340\377B\214\331\377"
+  "J\214\325\377m\270\363\377a\257\360\377Q\207\242\252\000\000\000\021Q@vfgQ\226\252"
+  "'\037\071\"\377\377\377\000\377\377\377\000\377\377\377\000Ii|Ux\255\315\335\206"
+  "\304\352\377\204\310\366\377m\270\363\377a\257\360\377}\265\325\377\200\272"
+  "\336\377\065M[D\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000\377"
+  "\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000\065M[D"
+  "a\215\247\210}\265\325\335u\252\312\335\000\000\000\"-BOD\377\377\377\000\377\377"
+  "\377\000\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377"
+  "\000\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000"
+  "\000\000\000\021\017\026\032D\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377"
+  "\000\377\377\377\000\377\377\377\000\377\377\377\000\377\377\377\000",
+};
+
