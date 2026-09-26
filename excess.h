@@ -276,6 +276,7 @@ int ray(vec* hit_pos, vec* hit_vec, const vec start_pos)
     if(fabsf(rd.y) < 1e-8f){rd.y = (rd.y < 0.f) ? -1e-8f : 1e-8f;}
     if(fabsf(rd.z) < 1e-8f){rd.z = (rd.z < 0.f) ? -1e-8f : 1e-8f;}
     const float idx = 1.f / rd.x, idy = 1.f / rd.y, idz = 1.f / rd.z;
+    const vec ro0 = start_pos;
 
     vec ro = start_pos;
     if(ro.x < -0.5f || ro.x > 127.5f || ro.y < -0.5f || ro.y > 127.5f || ro.z < -0.5f || ro.z > 127.5f)
@@ -305,26 +306,31 @@ int ray(vec* hit_pos, vec* hit_vec, const vec start_pos)
     float tMaxY = (((float)vy + (sy > 0 ? 0.5f : -0.5f)) - ro.y) * idy;
     float tMaxZ = (((float)vz + (sz > 0 ? 0.5f : -0.5f)) - ro.z) * idz;
 
-    int last_axis = (fabsf(rd.x) >= fabsf(rd.y) && fabsf(rd.x) >= fabsf(rd.z)) ? 0 :
-                    (fabsf(rd.y) >= fabsf(rd.z) ? 1 : 2);
-    int last_s = last_axis == 0 ? sx : last_axis == 1 ? sy : sz;
-
     for(;;)
     {
         const int vi = (int)PTI((uchar)vx, (uchar)vy, (uchar)vz);
         if(g.voxels[vi] != 0)
         {
             hit_pos->x = (float)vx; hit_pos->y = (float)vy; hit_pos->z = (float)vz;
+            const float t1x = (((float)vx - 0.5f) - ro0.x) * idx;
+            const float t2x = (((float)vx + 0.5f) - ro0.x) * idx;
+            const float t1y = (((float)vy - 0.5f) - ro0.y) * idy;
+            const float t2y = (((float)vy + 0.5f) - ro0.y) * idy;
+            const float t1z = (((float)vz - 0.5f) - ro0.z) * idz;
+            const float t2z = (((float)vz + 0.5f) - ro0.z) * idz;
+            const float tenx = fminf(t1x, t2x);
+            const float teny = fminf(t1y, t2y);
+            const float tenz = fminf(t1z, t2z);
             hit_vec->x = hit_vec->y = hit_vec->z = 0.f;
-            if(last_axis == 0){hit_vec->x = -(float)last_s;}
-            else if(last_axis == 1){hit_vec->y = -(float)last_s;}
-            else{hit_vec->z = -(float)last_s;}
+            if(tenx >= teny && tenx >= tenz){hit_vec->x = (t1x < t2x) ? -1.f : 1.f;}
+            else if(teny >= tenz){hit_vec->y = (t1y < t2y) ? -1.f : 1.f;}
+            else{hit_vec->z = (t1z < t2z) ? -1.f : 1.f;}
             return vi;
         }
 
-        if(tMaxX < tMaxY && tMaxX < tMaxZ){vx += sx; tMaxX += tDeltaX; last_axis = 0; last_s = sx;}
-        else if(tMaxY < tMaxZ){vy += sy; tMaxY += tDeltaY; last_axis = 1; last_s = sy;}
-        else{vz += sz; tMaxZ += tDeltaZ; last_axis = 2; last_s = sz;}
+        if(tMaxX < tMaxY && tMaxX < tMaxZ){vx += sx; tMaxX += tDeltaX;}
+        else if(tMaxY < tMaxZ){vy += sy; tMaxY += tDeltaY;}
+        else{vz += sz; tMaxZ += tDeltaZ;}
         if((unsigned)vx > 127u || (unsigned)vy > 127u || (unsigned)vz > 127u){return -1;}
     }
 }

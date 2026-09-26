@@ -594,38 +594,6 @@ void main_loop()
             vNorm(&look_dir);
         }
 
-        if(ptt != 0.f && t > ptt) // place trigger
-        {
-            traceViewPath(1);
-            if(lray > -1)
-            {
-                if(g.pb.w == 1 && isInBounds(g.pb) && g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] == 0)
-                {
-                    voxel_set_brush(g.pb.x, g.pb.y, g.pb.z, pal_voxel());
-                }
-            }
-            ptt = t+0.1;
-        }
-
-        if(dtt != 0.f && t > dtt) // delete trigger
-        {
-            traceViewPath(0);
-            if(lray > -1)
-            {
-                voxel_set_brush(ghp.x, ghp.y, ghp.z, 0);
-            }
-            dtt = t+0.1f;
-        }
-
-        if(rtt != 0.f) // replace trigger
-        {
-            traceViewPath(0);
-            if(lray > -1)
-            {
-                voxel_set_brush(ghp.x, ghp.y, ghp.z, pal_voxel());
-            }
-        }
-
         if(ks[0] == 1) // W
         {
             vec m;
@@ -762,6 +730,39 @@ void main_loop()
 
     ipp = g.pp; // inverse player position (setting global 'ipp' here is perfect)
     vInv(&ipp); // <--
+
+    if(focus_mouse == 1)
+    {
+        if(ptt != 0.f && t > ptt)
+        {
+            traceViewPath(1);
+            if(lray > -1)
+            {
+                if(g.pb.w == 1 && isInBounds(g.pb) && g.voxels[PTI(g.pb.x, g.pb.y, g.pb.z)] == 0)
+                {
+                    voxel_set_brush(g.pb.x, g.pb.y, g.pb.z, pal_voxel());
+                }
+            }
+            ptt = t+0.1f;
+        }
+        if(dtt != 0.f && t > dtt)
+        {
+            traceViewPath(0);
+            if(lray > -1)
+            {
+                voxel_set_brush(ghp.x, ghp.y, ghp.z, 0);
+            }
+            dtt = t+0.1f;
+        }
+        if(rtt != 0.f)
+        {
+            traceViewPath(0);
+            if(lray > -1)
+            {
+                voxel_set_brush(ghp.x, ghp.y, ghp.z, pal_voxel());
+            }
+        }
+    }
 
     // hud
     {
