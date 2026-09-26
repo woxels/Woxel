@@ -93,7 +93,7 @@ Woxel uses intuitive controls akin to Minetest and Minecraft, while providing a 
 * *e.g;* `./wox export untitled ply quads /home/user/file.ply`
 * *e.g;* `./wox export untitled ply tris /home/user/file.ply`
 * *e.g;* `./wox export ./file.b64 greedy ./file.ply`
-* *e.g;* `./wox export ~/file.wox.gz txt ./file.txt`
+* *e.g;* `./wox export ./file.wox.gz txt ./file.txt`
 * Source can be a saved project name, a `.b64` file, or a `.wox.gz` file. Format can be omitted when the output path ends in `.ply`, `.txt`, `.vv`, `.b64`, or `.wox.gz`.
 
 ## Compile
