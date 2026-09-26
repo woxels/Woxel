@@ -71,7 +71,7 @@ Woxel uses intuitive controls akin to Minetest and Minecraft, while providing a 
 * Search order if no flag is given:
   1. `keymap.txt` next to the `wox` binary
   2. `./keymap.txt` in the current directory
-  3. `keymap.txt` in the appdata folder (`SDL_GetPrefPath`)
+  3. `keymap.txt` in the appdata folder (`SDL_GetPrefPath` / dataPath)
 * Format: `action  key [key ...]`  e.g. `forward W*`  /  `look_up UP I*`
 * A key name is keycode-only. Append `*` (`W*`) to also match the physical scancode.
 * Actions: `forward back left right up down look_left look_right look_up look_down place delete clone replace mirror place_here fast pitch color_prev color_next hud reset save load menu speed1-speed7`
