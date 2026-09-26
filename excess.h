@@ -36,7 +36,6 @@ GLint projection_id;
 GLint view_id;
 GLint position_id;
 GLint voxel_id;
-GLint texcoord_id;
 GLint hud_id;
 GLint look_pos_id;
 GLint scale_id;
