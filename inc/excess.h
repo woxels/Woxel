@@ -12,6 +12,7 @@
 
 #include <time.h>
 #include <string.h>
+#include <stdlib.h>
 #include <zlib.h>
 
 #include <SDL2/SDL.h>
@@ -94,11 +95,12 @@ typedef struct
     float sens; // mouse sensitivity
     float xrot; // camera x-axis rotation
     float yrot; // camera y-axis rotation
-    float st;   // selected color
+    float st;   // selected color id (8..7+pal_n)
     float ms;   // player move speed
     float cms;  // custom move speed (high)
     float lms;  // custom move speed (low)
     uchar plock;// pitchlock on/off toggle
+    uchar pal_n;// user palette length (1..32), not terminated by #000000
     uint colors[39]; // color palette (7 system, 32 user)
     uchar voxels[max_voxels]; // x,y,z,w (w = color_id)
 }
@@ -128,6 +130,49 @@ void defaultState(const uint type)
     g.pb = (vec){0.f, 0.f, 0.f, -1.f};
     if(type == 0){g.lms = 37.2f, g.cms = 74.4f;}
     g.plock = 0;
+    if(g.pal_n < 1 || g.pal_n > 32){g.pal_n = 32;}
+}
+
+static uchar pal_st_max(void)
+{
+    uchar n = g.pal_n;
+    if(n < 1){n = 1;}
+    if(n > 32){n = 32;}
+    return (uchar)(7 + n);
+}
+
+static void pal_clamp_st(void)
+{
+    if(g.pal_n < 1 || g.pal_n > 32){g.pal_n = 32;}
+    if(g.st < 8.f || g.st > (float)pal_st_max()){g.st = 8.f;}
+}
+
+static float pal_prev(float st)
+{
+    pal_clamp_st();
+    const float mx = (float)pal_st_max();
+    if(st <= 8.f){return mx;}
+    return st - 1.f;
+}
+
+static float pal_next(float st)
+{
+    pal_clamp_st();
+    const float mx = (float)pal_st_max();
+    if(st >= mx){return 8.f;}
+    return st + 1.f;
+}
+
+static uchar pal_voxel(void)
+{
+    pal_clamp_st();
+    return (uchar)g.st;
+}
+
+static uint pal_color_index(void)
+{
+    pal_clamp_st();
+    return (uint)(g.st - 1.f);
 }
 uint placedVoxels()
 {
@@ -151,18 +196,14 @@ uint isInBounds(const vec p)
 //     if(p.z > 127.5f){p.z = 127.5f;}
 //     return 1;
 // }
-uint PTIB(const uchar x, const uchar y, const uchar z)
+int PTIB(const int x, const int y, const int z)
 {
-    uint r = (z * 16384) + (y * 128) + x;
-    if(r > max_voxels-1){r = max_voxels-1;}
-    return r;
+    if(x < 0 || y < 0 || z < 0 || x > 127 || y > 127 || z > 127){return -1;}
+    return (z * 16384) + (y * 128) + x;
 }
-int PTIB2(const char x, const char y, const char z)
+int PTIB2(const int x, const int y, const int z)
 {
-    if(x < 0 || y < 0 || z < 0){return -1;}
-    uint r = (z * 16384) + (y * 128) + x;
-    if(r > max_voxels-1){return -1;}
-    return r;
+    return PTIB(x, y, z);
 }
 
 
@@ -548,27 +589,23 @@ void loadColors(const char* file)
     if(f)
     {
         uint lino = 0;
-        char line[8];
-        while(fgets(line, 8, f) != NULL)
+        char line[64];
+        while(fgets(line, sizeof(line), f) != NULL)
         {
             uint val;
-            if(sscanf(line, "#%x", &val) == 1)
+            if(sscanf(line, "#%x", &val) == 1 || sscanf(line, "%x", &val) == 1)
             {
-                g.colors[7+lino] = val;
-                lino++;
-                if(lino > 31){break;}
-            }
-            else if(sscanf(line, "%x", &val) == 1)
-            {
-                g.colors[7+lino] = val;
+                g.colors[7+lino] = val; // #000000 is a valid color
                 lino++;
                 if(lino > 31){break;}
             }
         }
         fclose(f);
+        if(lino > 0){g.pal_n = (uchar)lino;}
+        pal_clamp_st();
         char tmp[16];
         timestamp(tmp);
-        printf("[%s] Custom color palette applied to project \"%s\".\n", tmp, openTitle);
+        printf("[%s] Custom color palette applied to project \"%s\" (%u colors).\n", tmp, openTitle, (uint)g.pal_n);
     }
 }
 uint isWayland()
@@ -616,29 +653,60 @@ void saveState(const char* name, const char* fne, const uint fs)
     setlocale(LC_NUMERIC, "");
     const uint64_t st = microtime();
 #endif
-    char file[256];
-    sprintf(file, "%s%s.wox.gz%s", appdir, name, fne);
-    if(fs == 0){sprintf(file, "%s%s.wox.gz%s", appdir, name, fne);}
-    else{sprintf(file, "%s", name);}
-    gzFile f = gzopen(file, "wb9hR");
-    if(f != Z_NULL)
+    char file[1024];
+    int n;
+    if(name == NULL || name[0] == 0)
     {
-        const size_t ws = sizeof(game_state);
-        if(gzwrite(f, &g, ws) != ws)
+        char tmp[16];
+        timestamp(tmp);
+        printf("[%s] Save failed: empty path.\n", tmp);
+        return;
+    }
+    if(fs == 0)
+    {
+        if(appdir == NULL)
         {
             char tmp[16];
             timestamp(tmp);
-            printf("[%s] Save corrupted.\n", tmp);
+            printf("[%s] Save failed: no project directory.\n", tmp);
+            return;
         }
-        gzclose(f);
+        n = snprintf(file, sizeof(file), "%s%s.wox.gz%s", appdir, name, fne ? fne : "");
+    }
+    else
+        n = snprintf(file, sizeof(file), "%s", name);
+    if(n < 0 || n >= (int)sizeof(file))
+    {
         char tmp[16];
         timestamp(tmp);
-#ifndef __linux__
-        printf("[%s] Saved %'u voxels.\n", tmp, placedVoxels());
-#else
-        printf("[%s] Saved %'u voxels. (%'lu μs)\n", tmp, placedVoxels(), microtime()-st);
-#endif
+        printf("[%s] Save failed: path too long.\n", tmp);
+        return;
     }
+    gzFile f = gzopen(file, "wb9hR");
+    if(f == Z_NULL)
+    {
+        char tmp[16];
+        timestamp(tmp);
+        printf("[%s] Save failed: could not write %s\n", tmp, file);
+        return;
+    }
+    const size_t ws = sizeof(game_state);
+    if(gzwrite(f, &g, ws) != (int)ws)
+    {
+        char tmp[16];
+        timestamp(tmp);
+        printf("[%s] Save corrupted: %s\n", tmp, file);
+        gzclose(f);
+        return;
+    }
+    gzclose(f);
+    char tmp[16];
+    timestamp(tmp);
+#ifndef __linux__
+    printf("[%s] Saved %u voxels to %s\n", tmp, placedVoxels(), file);
+#else
+    printf("[%s] Saved %'u voxels to %s (%'lu μs)\n", tmp, placedVoxels(), file, microtime()-st);
+#endif
 }
 uint loadState(const char* name, const uint fs)
 {
@@ -647,13 +715,28 @@ uint loadState(const char* name, const uint fs)
     const uint64_t st = microtime();
 #endif
     char file[1024];
-    if(fs == 0){sprintf(file, "%s%s.wox.gz", appdir, name);}
-    else{sprintf(file, "%s", name);}
+    int n;
+    if(name == NULL || name[0] == 0){return 0;}
+    if(fs == 0)
+    {
+        if(appdir == NULL){return 0;}
+        n = snprintf(file, sizeof(file), "%s%s.wox.gz", appdir, name);
+    }
+    else
+        n = snprintf(file, sizeof(file), "%s", name);
+    if(n < 0 || n >= (int)sizeof(file)){return 0;}
     gzFile f = gzopen(file, "rb");
     if(f != Z_NULL)
     {
         int gr = gzread(f, &g, sizeof(game_state));
         gzclose(f);
+        if(gr != (int)sizeof(game_state))
+        {
+            char tmp[16];
+            timestamp(tmp);
+            printf("[%s] Load truncated: %s (%d bytes)\n", tmp, file, gr);
+        }
+        pal_clamp_st();
         fks = (g.ms == g.cms); // update F-Key State
         char tmp[16];
         timestamp(tmp);
@@ -681,18 +764,65 @@ static int ply_export_id(const int x, const int y, const int z)
     if(x < 0 || y < 0 || z < 0 || x > 127 || y > 127 || z > 127){return 0;}
     const uchar id = g.voxels[PTI((uchar)x, (uchar)y, (uchar)z)];
     if(id < 8){return 0;}
-    const uint tu = g.colors[id-1];
-    if((tu & 0x00FFFFFF) == 0){return 0;}
     return (int)id;
+}
+
+typedef struct
+{
+    char* d;
+    size_t n;
+    size_t cap;
+} ply_mem;
+static ply_mem ply_vbuf;
+
+static int ply_mem_grow(const size_t extra)
+{
+    if(ply_vbuf.n + extra + 1 <= ply_vbuf.cap){return 1;}
+    size_t nc = ply_vbuf.cap ? ply_vbuf.cap : (size_t)1 << 16;
+    while(nc < ply_vbuf.n + extra + 1){nc *= 2;}
+    char* p = (char*)realloc(ply_vbuf.d, nc);
+    if(p == NULL){return 0;}
+    ply_vbuf.d = p;
+    ply_vbuf.cap = nc;
+    return 1;
+}
+
+void ply_mem_reset(void)
+{
+    ply_vbuf.n = 0;
+}
+
+void ply_mem_free(void)
+{
+    free(ply_vbuf.d);
+    ply_vbuf.d = NULL;
+    ply_vbuf.n = 0;
+    ply_vbuf.cap = 0;
+}
+
+int ply_mem_flush(FILE* f)
+{
+    if(f == NULL){return 0;}
+    if(ply_vbuf.n == 0){return 1;}
+    return fwrite(ply_vbuf.d, 1, ply_vbuf.n, f) == ply_vbuf.n;
 }
 
 static void ply_vert(FILE* f, float x, float y, float z,
                     const float nx, const float ny, const float nz,
                     const uchar r, const uchar gc, const uchar b)
 {
+    (void)f;
     x -= 64.f;
     y -= 64.f;
-    fprintf(f, "%g %g %g %g %g %g %u %u %u\n", x, y, z, nx, ny, nz, r, gc, b);
+    z -= 64.f;
+    char line[160];
+    const int k = snprintf(line, sizeof(line), "%g %g %g %g %g %g %u %u %u\n",
+                           x, y, z, nx, ny, nz, r, gc, b);
+    if(k > 0 && ply_mem_grow((size_t)k))
+    {
+        memcpy(ply_vbuf.d + ply_vbuf.n, line, (size_t)k);
+        ply_vbuf.n += (size_t)k;
+    }
 }
 
 static void ply_rgb(const int id, uchar* r, uchar* gc, uchar* b)
@@ -808,11 +938,11 @@ static void ply_emit_mz(FILE* f, int z, int x, int y, int w, int h, uchar r, uch
     ply_vert(f, x0, y1, p,  0,0,-1, r,gc,b);
 }
 
-// One quad per visible cube face (no merging). write_verts == 0 counts only.
+// One quad per visible cube face (no merging). Vertices go to ply_vbuf.
 uint ply_cube_mesh(FILE* f, const int write_verts)
 {
+    (void)write_verts;
     uint faces = 0;
-    FILE* out = write_verts ? f : NULL;
     for(int x = 0; x < 128; x++)
     {
         for(int y = 0; y < 128; y++)
@@ -822,25 +952,26 @@ uint ply_cube_mesh(FILE* f, const int write_verts)
                 const int id = ply_export_id(x, y, z);
                 if(!id){continue;}
                 uchar r, gc, b;
-                if(out){ply_rgb(id, &r, &gc, &b);}
-                if(ply_is_air(x+1, y, z)){faces++; if(out){ply_emit_px(out, x, z, y, 1, 1, r, gc, b);}}
-                if(ply_is_air(x-1, y, z)){faces++; if(out){ply_emit_mx(out, x, z, y, 1, 1, r, gc, b);}}
-                if(ply_is_air(x, y+1, z)){faces++; if(out){ply_emit_py(out, y, z, x, 1, 1, r, gc, b);}}
-                if(ply_is_air(x, y-1, z)){faces++; if(out){ply_emit_my(out, y, z, x, 1, 1, r, gc, b);}}
-                if(ply_is_air(x, y, z+1)){faces++; if(out){ply_emit_pz(out, z, x, y, 1, 1, r, gc, b);}}
-                if(ply_is_air(x, y, z-1)){faces++; if(out){ply_emit_mz(out, z, x, y, 1, 1, r, gc, b);}}
+                ply_rgb(id, &r, &gc, &b);
+                if(ply_is_air(x+1, y, z)){faces++; ply_emit_px(f, x, z, y, 1, 1, r, gc, b);}
+                if(ply_is_air(x-1, y, z)){faces++; ply_emit_mx(f, x, z, y, 1, 1, r, gc, b);}
+                if(ply_is_air(x, y+1, z)){faces++; ply_emit_py(f, y, z, x, 1, 1, r, gc, b);}
+                if(ply_is_air(x, y-1, z)){faces++; ply_emit_my(f, y, z, x, 1, 1, r, gc, b);}
+                if(ply_is_air(x, y, z+1)){faces++; ply_emit_pz(f, z, x, y, 1, 1, r, gc, b);}
+                if(ply_is_air(x, y, z-1)){faces++; ply_emit_mz(f, z, x, y, 1, 1, r, gc, b);}
             }
         }
     }
     return faces;
 }
 
-// write_verts == 0: count quads only. write_verts == 1: emit vertices to f.
+// Vertices go to ply_vbuf. Returns quad count.
 uint ply_greedy_mesh(FILE* f, const int write_verts)
 {
+    (void)write_verts;
     int mask[128 * 128];
     uint quads = 0;
-    FILE* out = write_verts ? f : NULL;
+    FILE* out = f;
 
     for(int x = 0; x < 128; x++)
     {
@@ -963,7 +1094,7 @@ void replaceColour(SDL_Surface* surf, SDL_Rect r, Uint32 old_color, Uint32 new_c
 }
 void updateSelectColor()
 {
-    const uint tu = g.colors[(uint)g.st-1];
+    const uint tu = g.colors[pal_color_index()];
     sclr = SDL_MapRGB(sHud->format, (tu & 0x00FF0000) >> 16,
                                     (tu & 0x0000FF00) >> 8,
                                      tu & 0x000000FF);
