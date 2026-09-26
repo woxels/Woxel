@@ -124,7 +124,6 @@ typedef struct
 {
     GLuint vid; // vertex buff id
     GLuint iid;	// index buff id
-    GLuint tid;	// uv/st texcoord buff id
 } ESModel;
 const GLfloat hud_vertices[] = {-1,1, -1,-1, 1,1, 1,-1,};
 const GLubyte hud_indices[] = {0,1,2,2,3,1};
@@ -367,11 +366,12 @@ GLint  shdHud_scale;
 GLint  shdHud_view;
 GLint  shdHud_voxels;
 
-GLuint shdVoxel;
-GLint  shdVoxel_projection;
-GLint  shdVoxel_view;
-GLint  shdVoxel_position;
-GLint  shdVoxel_voxel;
+// leftover from the old raster voxel shader
+// GLuint shdVoxel;
+// GLint  shdVoxel_projection;
+// GLint  shdVoxel_view;
+// GLint  shdVoxel_position;
+// GLint  shdVoxel_voxel;
 
 //
 

@@ -1222,9 +1222,9 @@ int main(int argc, char** argv)
     printf("To load Base64: ./wox loadb64 <file_path>\n");
     printf("e.g; ./wox loadb64 /home/user/file.b64\n");
     printf("Loaded files are adopted as a project (basename) so F3 / exit can save them.\n\n");
-    printf("Keymap: ./wox keymap [path]   (writes default keymap.txt next to the binary)\n");
+    printf("Keymap: ./wox keymap [path]   (writes default keymap.txt in appdata)\n");
     printf("Load a keymap: ./wox --keymap-file ./mykeys.txt   (also -k / --keymap / loadkeymap)\n");
-    printf("Search order: --keymap-file, then keymap.txt next to wox, then appdata keymap.txt\n");
+    printf("Search order: --keymap-file, then appdata keymap.txt\n");
     printf("Format: action  key [key ...]    suffix * = keycode+scancode (e.g. W*)\n\n");
     printf("Wayland custom decorations: ./wox --wayland [project]\n");
     printf("e.g; ./wox --wayland Untitled\n");

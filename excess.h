@@ -32,7 +32,6 @@
 #define uchar unsigned char
 
 // render state id's
-GLint projection_id;
 GLint view_id;
 GLint position_id;
 GLint voxel_id;
@@ -57,14 +56,12 @@ SDL_Surface* s_icon = NULL;
 int mx=0, my=0, xd=0, yd=0, lx=0, ly=0;
 int winw = 1024, winh = 768;
 int winw2 = 512, winh2 = 384;
-float ww, wh;
-float aspect, t = 0.f;
+float t = 0.f;
 uint wayland=0,maxed=0,size=0,dsx=0,dsy=0;
 uint g_fps = 0;
 uint ks[10] = {0};      // keystate
 uint focus_mouse = 0;   // mouse lock
 uint showhud = 1;       // hud visibility
-float vdist = 4096.f;   // view distance
 vec ipp;                // inverse player position
 vec look_dir;           // camera look direction
 int lray = 0;           // pointed at node index
@@ -203,10 +200,6 @@ int PTIB(const int x, const int y, const int z)
 {
     if(x < 0 || y < 0 || z < 0 || x > 127 || y > 127 || z > 127){return -1;}
     return (z * 16384) + (y * 128) + x;
-}
-int PTIB2(const int x, const int y, const int z)
-{
-    return PTIB(x, y, z);
 }
 
 static void mark_dirty_full(void)
@@ -1058,19 +1051,6 @@ typedef struct { SDL_Keycode sym; SDL_Scancode scan; } wox_bind;
 static wox_bind wox_binds[ACT_COUNT][WOX_MAX_BIND];
 static int wox_bind_n[ACT_COUNT];
 
-static const char* wox_act_name(int a)
-{
-    static const char* n[ACT_COUNT] = {
-        "forward","back","left","right","up","down",
-        "look_left","look_right","look_up","look_down",
-        "place","delete","clone","replace","mirror","place_here",
-        "fast","pitch","color_prev","color_next",
-        "hud","reset","save","load","menu",
-        "speed1","speed2","speed3","speed4","speed5","speed6","speed7"
-    };
-    return (a >= 0 && a < ACT_COUNT) ? n[a] : "";
-}
-
 static int wox_act_from_name(const char* s)
 {
     if(wox_ieq(s,"forward") || wox_ieq(s,"move_forward") || wox_ieq(s,"w")){return ACT_FORWARD;}
@@ -1251,7 +1231,7 @@ static void wox_keymap_path_app(char* out, size_t n)
 
 static const char wox_keymap_default_text[] =
     "# Woxel keymap.txt — one action per line:  action  key [key ...]\n"
-    "# Place this file next to the wox binary. Lines starting with # are comments.\n"
+    "# Search order: next to the wox binary, then ./keymap.txt, then appdata.\n"
     "# Key names: A-Z  0-9  F1-F12  LEFT RIGHT UP DOWN  SPACE TAB ESCAPE\n"
     "#            LSHIFT RSHIFT LCTRL RCTRL  SLASH QUOTE\n"
     "# W    = keycode only (the letter W, layout-dependent).\n"
@@ -1694,13 +1674,6 @@ void doPerspective()
     sHud = SDL_RGBA32Surface(winw, winh);
     drawHud(0);
     hudmap = esLoadTextureA(winw, winh, sHud->pixels, 0);
-    ww = (float)winw;
-    wh = (float)winh;
-}
-uint insideFrustum(const float x, const float y, const float z)
-{
-    const float xm = x+g.pp.x, ym = y+g.pp.y, zm = z+g.pp.z;
-    return (xm*look_dir.x) + (ym*look_dir.y) + (zm*look_dir.z) > 0.f; // check the angle
 }
 SDL_Surface* surfaceFromData(const Uint32* data, Uint32 w, Uint32 h)
 {
