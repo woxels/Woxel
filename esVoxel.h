@@ -439,9 +439,9 @@ void makeHud()
     shdHud_position   = glGetAttribLocation(shdHud,  "position");
     //<><><><><><><><><><><><><><><><><><><><><><><><><><><><><>
     shdHud_voxels    = glGetUniformLocation(shdHud, "voxels");
-    shdHud_look_pos   = glGetUniformLocation(shdHud, "look_pos");
-    shdHud_scale      = glGetUniformLocation(shdHud, "scale");
-    shdHud_view       = glGetUniformLocation(shdHud, "view");
+    shdHud_look_pos  = glGetUniformLocation(shdHud, "look_pos");
+    shdHud_scale     = glGetUniformLocation(shdHud, "scale");
+    shdHud_view      = glGetUniformLocation(shdHud, "view");
     shdHud_hud       = glGetUniformLocation(shdHud, "hud");
 
     esBind(GL_ARRAY_BUFFER, &mdlPlane.vid, &hud_vertices, sizeof(hud_vertices), GL_STATIC_DRAW);
