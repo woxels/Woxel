@@ -1228,7 +1228,7 @@ int main(int argc, char** argv)
     printf("Search order: --keymap-file, then next to the binary, then ./keymap.txt, then appdata\n");
     printf("Format: action  key [key ...]    suffix * = keycode+scancode (e.g. W*)\n\n");
     printf("Wayland custom decorations: ./wox --wayland [project]\n");
-    printf("e.g; ./wox --wayland Untitled\n");
+    printf("e.g; ./wox -w Untitled\n");
     printf("Force native decorations: ./wox --no-wayland  (also --x11)\n");
     printf("The flag can appear anywhere on the command line.\n\n");
     printf("To export: ./wox export <project_or_file> <[OPTIONAL]format> <[OPTIONAL]ply_mode> <export_path>\n");
@@ -1249,6 +1249,9 @@ int main(int argc, char** argv)
     // get paths
     basedir = SDL_GetBasePath();
     appdir = SDL_GetPrefPath("voxdsp", "woxel");
+    printf("currentPath: %s\n", basedir);
+    printf("dataPath:    %s\n", appdir);
+    printf("----\n");
 
     // argv
     char export_path[1024] = {0};
@@ -1265,7 +1268,7 @@ int main(int argc, char** argv)
         for(int i = 1; i < argc; i++)
         {
             if(wox_ieq(argv[i], "wayland") || wox_ieq(argv[i], "--wayland") ||
-               wox_ieq(argv[i], "-wayland") || wox_ieq(argv[i], "--decor"))
+               wox_ieq(argv[i], "-w") || wox_ieq(argv[i], "--decor"))
             {
                 wayland_cli = 1;
                 continue;
