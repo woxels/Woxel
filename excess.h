@@ -1340,10 +1340,50 @@ static void wox_keymap_init(const char* custom)
 //*************************************
 // greedy PLY mesher (quads, same-color merge)
 //*************************************
-static int ply_is_air(const int x, const int y, const int z)
+// Exterior flood fill: air reachable from outside the volume (padded by 1
+// voxel on every side). Only faces touching this air are exported, so
+// enclosed cavities and interior faces never reach the PLY.
+#define PLY_FD 130
+#define PLY_FI(x,y,z) (((z)+1)*PLY_FD*PLY_FD + ((y)+1)*PLY_FD + ((x)+1))
+static uchar ply_outside[PLY_FD*PLY_FD*PLY_FD];
+
+static int ply_cell_open(const int x, const int y, const int z)
 {
     if(x < 0 || y < 0 || z < 0 || x > 127 || y > 127 || z > 127){return 1;}
     return g.voxels[PTI((uchar)x, (uchar)y, (uchar)z)] == 0;
+}
+
+void ply_flood_exterior(void)
+{
+    static uint stack[PLY_FD*PLY_FD*PLY_FD];
+    memset(ply_outside, 0, sizeof(ply_outside));
+    uint sp = 0;
+    ply_outside[0] = 1; // corner (-1,-1,-1) is always padding air
+    stack[sp++] = 0;
+    while(sp > 0)
+    {
+        const uint i = stack[--sp];
+        const int x = (int)(i % PLY_FD) - 1;
+        const int y = (int)((i / PLY_FD) % PLY_FD) - 1;
+        const int z = (int)(i / (PLY_FD*PLY_FD)) - 1;
+        static const int d[6][3] = {{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
+        for(int k = 0; k < 6; k++)
+        {
+            const int nx = x + d[k][0], ny = y + d[k][1], nz = z + d[k][2];
+            if(nx < -1 || ny < -1 || nz < -1 || nx > 128 || ny > 128 || nz > 128){continue;}
+            const uint ni = PLY_FI(nx, ny, nz);
+            if(ply_outside[ni] || !ply_cell_open(nx, ny, nz)){continue;}
+            ply_outside[ni] = 1;
+            stack[sp++] = ni;
+        }
+    }
+}
+
+// "air" for export = exterior air reached by ply_flood_exterior()
+static int ply_is_air(const int x, const int y, const int z)
+{
+    if(x < -1 || y < -1 || z < -1 || x > 128 || y > 128 || z > 128){return 1;}
+    return ply_outside[PLY_FI(x, y, z)];
 }
 
 static int ply_export_id(const int x, const int y, const int z)
@@ -1529,6 +1569,7 @@ static void ply_emit_mz(FILE* f, int z, int x, int y, int w, int h, uchar r, uch
 uint ply_cube_mesh(FILE* f, const int write_verts)
 {
     (void)write_verts;
+    ply_flood_exterior(); // always: drop inner faces / enclosed cavities
     uint faces = 0;
     for(int x = 0; x < 128; x++)
     {
@@ -1556,6 +1597,7 @@ uint ply_cube_mesh(FILE* f, const int write_verts)
 uint ply_greedy_mesh(FILE* f, const int write_verts)
 {
     (void)write_verts;
+    ply_flood_exterior(); // always: drop inner faces / enclosed cavities
     int mask[128 * 128];
     uint quads = 0;
     FILE* out = f;
