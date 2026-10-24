@@ -664,6 +664,8 @@ void main_loop()
                 g.xrot -= xd*g.sens;
                 g.yrot -= yd*g.sens;
 
+				if(g.xrot > PI){g.xrot -= x2PI;}else if(g.xrot < -PI){g.xrot += x2PI;}
+
                 if(g.plock == 1)
                 {
                     if(g.yrot > 3.11f)
@@ -689,6 +691,8 @@ void main_loop()
             {
                 g.xrot += xd*g.sens;
                 g.yrot += yd*g.sens;
+
+				if(g.xrot > PI){g.xrot -= x2PI;}else if(g.xrot < -PI){g.xrot += x2PI;}
 
                 if(g.plock == 1)
                 {
