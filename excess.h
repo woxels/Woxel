@@ -29,6 +29,9 @@
 #define sint GLint
 #define uchar unsigned char
 
+#define PI    3.14159265359f
+#define x2PI  6.28318530718f
+
 // render state id's
 GLint view_id;
 GLint position_id;
